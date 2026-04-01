@@ -548,6 +548,17 @@ def get_run(run_id, user_id=None):
     return dict(row) if row else None
 
 
+def delete_run(run_id, user_id=None):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user:
+        raise ValueError("Please sign in to delete saved lists.")
+    with conn() as db:
+        db.execute(
+            "DELETE FROM searches WHERE id = ? AND user_id = ?",
+            (run_id, user["id"]),
+        )
+
+
 def save_service(name, description, location_filter, time_window, user_id=None):
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user:
@@ -1503,6 +1514,12 @@ def page_saved_lists():
             if row["id"] == rid
         ),
     )
+    action_col1, action_col2 = st.columns([1, 4])
+    with action_col1:
+        if st.button("Delete selected list", key=f"delete_list_{selected_id}"):
+            delete_run(selected_id)
+            st.success("Saved list deleted.")
+            st.rerun()
     show_run(get_run(selected_id), f"saved_{selected_id}")
 
 
