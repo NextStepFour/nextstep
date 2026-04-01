@@ -50,6 +50,7 @@ $env:APP_BASE_URL="http://localhost:8501"
 $env:STRIPE_SECRET_KEY="your_stripe_secret_key"
 $env:STRIPE_PRICE_ID_STARTER="price_..."
 $env:STRIPE_PRICE_ID_PRO="price_..."
+$env:NEXTSTEP_DB_PATH="nextstep_portal.db"
 ```
 
 ### macOS/Linux
@@ -60,6 +61,7 @@ export APP_BASE_URL="http://localhost:8501"
 export STRIPE_SECRET_KEY="your_stripe_secret_key"
 export STRIPE_PRICE_ID_STARTER="price_..."
 export STRIPE_PRICE_ID_PRO="price_..."
+export NEXTSTEP_DB_PATH="nextstep_portal.db"
 ```
 
 ## Run the app locally with Streamlit
@@ -96,7 +98,7 @@ https://app.yourdomain.com
 
 ## Notes
 
-- The current app keeps data in `nextstep_portal.db`
+- The current app keeps data in SQLite and can use `NEXTSTEP_DB_PATH` to point to a persistent file
 - For a low-volume MVP, this can work on a host with a persistent disk
 - For a larger production rollout, move from SQLite to a hosted Postgres database
 

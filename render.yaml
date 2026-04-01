@@ -5,7 +5,10 @@ services:
     plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0
+    envVars:
+      - key: NEXTSTEP_DB_PATH
+        value: /var/data/nextstep_portal.db
     disk:
       name: nextstep-data
-      mountPath: /opt/render/project/src
+      mountPath: /var/data
       sizeGB: 1

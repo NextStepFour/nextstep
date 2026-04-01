@@ -18,7 +18,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 
-DB_PATH = "nextstep_portal.db"
+DB_PATH = os.getenv("NEXTSTEP_DB_PATH", "nextstep_portal.db")
 DEFAULT_CREDITS = 50
 TIME_OPTIONS = ["2 weeks", "1 month", "2 months", "3 months"]
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8501")
