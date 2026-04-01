@@ -1055,7 +1055,7 @@ def aggregate_companies(evidence_df):
             }
         )
     df = pd.DataFrame(rows)
-    return df[COMPANY_COLUMNS].sort_values(["opportunity_score", "matching_post_count"], ascending=[False, False]).reset_index(drop=True)
+    return df[COMPANY_COLUMNS].sort_values(["opportunity_score", "buyer_company"], ascending=[False, True]).reset_index(drop=True)
 
 
 def format_lists_for_display(df):
