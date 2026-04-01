@@ -106,7 +106,6 @@ DISPLAY_NAME_MAP = {
     "credits_used": "Credits Used",
     "created_at": "Created At",
     "estimated_search_time": "Actual Run Time",
-    "default_time_window": "Default Time Window",
     "target_location": "Target Location",
     "service_name": "Service Name",
     "service_description": "Service Description",
@@ -576,7 +575,7 @@ def save_service(name, description, location_filter, time_window, user_id=None):
                 name.strip(),
                 description.strip(),
                 location_filter.strip(),
-                time_window,
+                "2 months",
                 datetime.now().strftime("%Y-%m-%d %H:%M"),
             ),
         )
@@ -1365,13 +1364,12 @@ def page_services():
         name = st.text_input("Service name")
         description = st.text_area("Service description", height=180, placeholder="Describe the service, scope, titles, and keywords.")
         location_filter = st.text_input("Default target location", value="Any U.S. location")
-        time_window = st.selectbox("Default time window", TIME_OPTIONS, index=2)
         submit = st.form_submit_button("Save service profile")
     if submit:
         if not name.strip() or not description.strip():
             st.error("Please enter both a service name and a service description.")
         else:
-            save_service(name, description, location_filter, time_window)
+            save_service(name, description, location_filter, "2 months")
             st.success("Service profile saved.")
             st.rerun()
     svc = services_df()
