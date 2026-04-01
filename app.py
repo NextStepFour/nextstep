@@ -18,6 +18,8 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 
+APP_NAME = "NextStepSignal"
+APP_TAGLINE = "Market intelligence for operational expansion and opportunity discovery"
 DB_PATH = os.getenv("NEXTSTEP_DB_PATH", "nextstep_portal.db")
 DEFAULT_CREDITS = 50
 TIME_OPTIONS = ["2 weeks", "1 month", "2 months", "3 months"]
@@ -125,7 +127,7 @@ DISPLAY_NAME_MAP = {
     "source_services": "Source Services",
 }
 
-st.set_page_config(page_title="NextStepSignal", layout="wide")
+st.set_page_config(page_title=APP_NAME, layout="wide")
 
 
 PROMPT_TEMPLATE = """You are a market intelligence engine for solar service sales.
@@ -336,8 +338,13 @@ EXPANSION_SCHEMA = {
 
 
 def conn():
-    db = sqlite3.connect(DB_PATH)
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+    db = sqlite3.connect(DB_PATH, timeout=30)
     db.row_factory = sqlite3.Row
+    db.execute("PRAGMA journal_mode=WAL")
+    db.execute("PRAGMA foreign_keys=ON")
     return db
 
 
@@ -558,7 +565,7 @@ def delete_run(run_id, user_id=None):
         )
 
 
-def save_service(name, description, location_filter, time_window, user_id=None):
+def save_service(name, description, location_filter, user_id=None):
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user:
         raise ValueError("Please sign in to save service profiles.")
@@ -627,7 +634,10 @@ def save_run(
 
 
 def load_df(json_text):
-    return pd.DataFrame(json.loads(json_text or "[]"))
+    try:
+        return pd.DataFrame(json.loads(json_text or "[]"))
+    except (TypeError, json.JSONDecodeError):
+        return pd.DataFrame()
 
 
 def client():
@@ -1003,16 +1013,6 @@ def flatten_unique(values):
     return found
 
 
-def signal_label(score):
-    if score >= 85:
-        return "Very High"
-    if score >= 70:
-        return "High"
-    if score >= 55:
-        return "Medium"
-    return "Low"
-
-
 def safe_text(value, default=""):
     if pd.isna(value):
         return default
@@ -1084,17 +1084,6 @@ def pretty_df(df):
     )
 
 
-def contains_filter(df, column_name, query):
-    if not query.strip() or column_name not in df.columns:
-        return df
-    return df[
-        df[column_name]
-        .fillna("")
-        .astype(str)
-        .str.contains(query.strip(), case=False, na=False)
-    ]
-
-
 def csv_data(df):
     buffer = io.StringIO()
     pretty_df(df).to_csv(buffer, index=False)
@@ -1106,7 +1095,7 @@ def pdf_data(company_df, meta):
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
     story = [
-        Paragraph("NextStepSignal Opportunity Report", styles["Title"]),
+        Paragraph(f"{APP_NAME} Opportunity Report", styles["Title"]),
         Spacer(1, 10),
         Paragraph(escape(f"Run name: {meta['run_name']}"), styles["Normal"]),
         Paragraph(escape(f"Generated: {meta['created_at']}"), styles["Normal"]),
@@ -1139,7 +1128,7 @@ def expansion_pdf_data(expansion_df, meta):
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
     story = [
-        Paragraph("NextStepSignal Potential Expansions Report", styles["Title"]),
+        Paragraph(f"{APP_NAME} Potential Expansions Report", styles["Title"]),
         Spacer(1, 10),
         Paragraph(escape(f"Generated: {meta['created_at']}"), styles["Normal"]),
         Paragraph(escape(f"Services analyzed: {meta['services_text']}"), styles["Normal"]),
@@ -1180,7 +1169,7 @@ def show_run(run_record, key_prefix):
     st.download_button(
         "Download buyer company list as CSV",
         data=csv_data(company_df),
-        file_name=f"nextstep_buyer_company_list_{run_record['id']}.csv",
+        file_name=f"nextstepsignal_buyer_company_list_{run_record['id']}.csv",
         mime="text/csv",
         key=f"{key_prefix}_company_csv",
     )
@@ -1197,7 +1186,7 @@ def show_run(run_record, key_prefix):
                 "mode": "High volume" if run_record["high_volume_mode"] else "Focused",
             },
         ),
-        file_name=f"nextstep_opportunity_report_{run_record['id']}.pdf",
+        file_name=f"nextstepsignal_opportunity_report_{run_record['id']}.pdf",
         mime="application/pdf",
         key=f"{key_prefix}_company_pdf",
     )
@@ -1206,7 +1195,7 @@ def show_run(run_record, key_prefix):
 def build_master_saved_data():
     runs = runs_df()
     if runs.empty:
-        return pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame()
 
     evidence_frames = []
     for _, run_row in runs.iterrows():
@@ -1223,15 +1212,14 @@ def build_master_saved_data():
         evidence_frames.append(evidence_df)
 
     if not evidence_frames:
-        return pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame()
 
     master_evidence_df = pd.concat(evidence_frames, ignore_index=True)
     master_evidence_df = master_evidence_df.sort_values(
         by="match_score", ascending=False
     ).reset_index(drop=True)
 
-    master_company_df = aggregate_companies(master_evidence_df)
-    return master_company_df, master_evidence_df
+    return aggregate_companies(master_evidence_df)
 
 
 def portal_access_allowed(user):
@@ -1241,8 +1229,8 @@ def portal_access_allowed(user):
 
 
 def page_auth():
-    st.title("NextStepSignal")
-    st.subheader("Market intelligence for operational expansion and opportunity discovery")
+    st.title(APP_NAME)
+    st.subheader(APP_TAGLINE)
     st.write("Create an account to save services, generate prospect lists, and manage subscription access.")
     login_tab, signup_tab = st.tabs(["Sign In", "Create Account"])
 
@@ -1281,7 +1269,7 @@ def page_auth():
 
 def page_billing(user):
     st.title("Plans & Billing")
-    st.write("Choose a plan to make NextStepSignal public-facing and subscription ready. Demo accounts also keep a small starter credit balance for testing.")
+    st.write(f"Choose a plan to make {APP_NAME} public-facing and subscription ready. Demo accounts also keep a small starter credit balance for testing.")
     st.metric("Credits Remaining", credits(user["id"]))
     st.metric("Subscription Status", user.get("subscription_status", "inactive").title())
     st.metric("Current Plan", user.get("plan_name") or "None")
@@ -1322,8 +1310,8 @@ def page_billing(user):
 
 
 def page_dashboard():
-    st.title("NextStepSignal")
-    st.subheader("Market intelligence for operational expansion and opportunity discovery")
+    st.title(APP_NAME)
+    st.subheader(APP_TAGLINE)
     svc = services_df()
     runs = runs_df()
     c1, c2, c3 = st.columns(3)
@@ -1369,14 +1357,15 @@ def page_services():
         if not name.strip() or not description.strip():
             st.error("Please enter both a service name and a service description.")
         else:
-            save_service(name, description, location_filter, "2 months")
+            save_service(name, description, location_filter)
             st.success("Service profile saved.")
             st.rerun()
     svc = services_df()
     if svc.empty:
         st.info("No service profiles saved yet.")
     else:
-        st.dataframe(pretty_df(svc), use_container_width=True)
+        service_display = svc[["id", "service_name", "target_location", "created_at"]].copy()
+        st.dataframe(pretty_df(service_display), use_container_width=True)
 
 
 def page_generate():
@@ -1477,14 +1466,14 @@ def page_saved_lists():
         st.info("No saved lists yet.")
         return
 
-    master_company_df, _ = build_master_saved_data()
+    master_company_df = build_master_saved_data()
     if not master_company_df.empty:
         st.markdown("**Master exports**")
         st.dataframe(pretty_df(master_company_df), use_container_width=True)
         st.download_button(
             "Download master company list as CSV",
             data=csv_data(master_company_df),
-            file_name="nextstep_master_company_list.csv",
+            file_name="nextstepsignal_master_company_list.csv",
             mime="text/csv",
             key="master_company_csv",
         )
@@ -1594,7 +1583,7 @@ def page_potential_expansions():
             st.download_button(
                 "Download potential expansions as CSV",
                 data=csv_data(display_expansion_df),
-                file_name="nextstep_potential_expansions.csv",
+                file_name="nextstepsignal_potential_expansions.csv",
                 mime="text/csv",
             )
             st.download_button(
@@ -1609,7 +1598,7 @@ def page_potential_expansions():
                         "mode": "High volume" if high_volume else "Focused",
                     },
                 ),
-                file_name="nextstep_potential_expansions.pdf",
+                file_name="nextstepsignal_potential_expansions.pdf",
                 mime="application/pdf",
             )
 
@@ -1641,7 +1630,7 @@ if not user:
     page_auth()
 else:
     with st.sidebar:
-        st.title("NextStepSignal")
+        st.title(APP_NAME)
         st.write(user["full_name"])
         st.write(user["email"])
         st.metric("Credits Remaining", credits(user["id"]))

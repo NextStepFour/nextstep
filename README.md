@@ -14,8 +14,7 @@ Simple Streamlit portal for generating and saving market intelligence prospect l
 8. Let users create accounts and sign in
 9. Support Stripe subscription checkout and billing status refresh
 10. Retain saved lists inside the portal
-11. Export company opportunities as CSV or PDF
-12. Export supporting evidence as CSV
+11. Export buyer company lists as CSV or PDF
 
 ## Portal sections
 
