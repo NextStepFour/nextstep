@@ -4,7 +4,6 @@ import os
 import sqlite3
 import hashlib
 import hmac
-import math
 import statistics
 import time
 from datetime import datetime
@@ -24,6 +23,8 @@ DEFAULT_CREDITS = 50
 TIME_OPTIONS = ["2 weeks", "1 month", "2 months", "3 months"]
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8501")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+DISCOVERY_MODEL = os.getenv("OPENAI_DISCOVERY_MODEL", "gpt-5-mini")
+SYNTHESIS_MODEL = os.getenv("OPENAI_SYNTHESIS_MODEL", "gpt-5-mini")
 PLANS = {
     "starter": {
         "name": "Starter",
@@ -49,52 +50,19 @@ EVIDENCE_COLUMNS = [
     "match_type",
     "likely_service_need",
     "buyer_department",
-    "primary_contact_name",
-    "primary_contact_role",
-    "primary_contact_info",
-    "contact_priority",
-    "contact_confidence",
     "outreach_next_step",
-    "company_website",
-    "careers_page_url",
-    "public_contact_page",
-    "recommended_first_outreach_role",
-    "decision_maker_name",
-    "decision_maker_role",
-    "decision_maker_contact_info",
-    "hiring_signal_summary",
-    "enrichment_confidence",
     "why_it_matches",
     "matching_responsibilities",
     "matching_keywords",
     "source_url",
 ]
 COMPANY_COLUMNS = [
-    "client2_company",
+    "buyer_company",
+    "job_posting_title",
     "matched_services",
     "opportunity_score",
-    "signal_strength",
-    "matching_post_count",
-    "open_roles_found",
-    "filled_roles_found",
-    "latest_posted_date",
-    "best_matching_posting",
-    "likely_buyer_department",
-    "priority_contact",
-    "priority_contact_info",
-    "contact_priority",
-    "company_website",
-    "careers_page_url",
-    "public_contact_page",
-    "recommended_first_outreach_role",
-    "decision_maker_name",
-    "decision_maker_role",
-    "decision_maker_contact_info",
-    "hiring_signal_summary",
-    "enrichment_confidence",
-    "why_this_company_is_a_fit",
-    "suggested_outreach_angle",
-    "outreach_next_step",
+    "likely_buyer_department_general",
+    "best_matching_postings",
     "source_urls",
 ]
 EXPANSION_COLUMNS = [
@@ -110,22 +78,12 @@ EXPANSION_COLUMNS = [
     "go_to_market_note",
 ]
 DISPLAY_NAME_MAP = {
-    "client2_company": "Potential Buyer Company",
+    "buyer_company": "Buyer Company",
+    "job_posting_title": "Job Posting Title",
     "matched_services": "Matched Services",
     "opportunity_score": "Opportunity Score",
-    "signal_strength": "Signal Strength",
-    "matching_post_count": "Matching Post Count",
-    "open_roles_found": "Open Roles Found",
-    "filled_roles_found": "Filled Roles Found",
-    "latest_posted_date": "Latest Posted Date",
-    "best_matching_posting": "Best Matching Posting",
-    "likely_buyer_department": "Likely Buyer Department",
-    "priority_contact": "Priority Contact",
-    "priority_contact_info": "Priority Contact Info",
-    "contact_priority": "Contact Priority",
-    "why_this_company_is_a_fit": "Why This Company Is A Fit",
-    "suggested_outreach_angle": "Suggested Outreach Angle",
-    "outreach_next_step": "Outreach Next Step",
+    "likely_buyer_department_general": "Likely Buyer Department (General)",
+    "best_matching_postings": "Best Matching Posting",
     "source_urls": "Source URLs",
     "matched_service": "Matched Service",
     "company_name": "Company Name",
@@ -137,19 +95,6 @@ DISPLAY_NAME_MAP = {
     "match_type": "Match Type",
     "likely_service_need": "Likely Service Need",
     "buyer_department": "Buyer Department",
-    "primary_contact_name": "Primary Contact Name",
-    "primary_contact_role": "Primary Contact Role",
-    "primary_contact_info": "Primary Contact Info",
-    "contact_confidence": "Contact Confidence",
-    "company_website": "Company Website",
-    "careers_page_url": "Careers Page URL",
-    "public_contact_page": "Public Contact Page",
-    "recommended_first_outreach_role": "Recommended First Outreach Role",
-    "decision_maker_name": "Decision Maker Name",
-    "decision_maker_role": "Decision Maker Role",
-    "decision_maker_contact_info": "Decision Maker Contact Info",
-    "hiring_signal_summary": "Hiring Signal Summary",
-    "enrichment_confidence": "Enrichment Confidence",
     "matching_responsibilities": "Matching Responsibilities",
     "matching_keywords": "Matching Keywords",
     "source_url": "Source URL",
@@ -160,7 +105,7 @@ DISPLAY_NAME_MAP = {
     "mode": "Search Mode",
     "credits_used": "Credits Used",
     "created_at": "Created At",
-    "estimated_search_time": "Actual Search Time",
+    "estimated_search_time": "Actual Run Time",
     "default_time_window": "Default Time Window",
     "target_location": "Target Location",
     "service_name": "Service Name",
@@ -222,11 +167,6 @@ Return valid JSON only using this schema:
       "matching_responsibilities": [],
       "matching_keywords": [],
       "buyer_department": null,
-      "primary_contact_name": null,
-      "primary_contact_role": null,
-      "primary_contact_info": null,
-      "contact_priority": "High|Medium|Low|Unknown",
-      "contact_confidence": null,
       "outreach_next_step": null,
       "source_url": null
     }
@@ -249,47 +189,10 @@ Rules:
 - why_it_matches must be a list
 - matching_responsibilities must be a list
 - matching_keywords must be a list
-- When possible, identify the likely public-facing hiring, operations, project, procurement, construction, commissioning, or quality contact tied to the need
-- Use only publicly available contact information
-- contact_priority must be one of: High, Medium, Low, Unknown
-- contact_confidence should be a short label such as High, Medium, Low, or null
+- buyer_department should reflect the team most likely tied to the hiring signal when supported by the posting
+- outreach_next_step should be a short, practical next step based only on the posting and likely buyer department
 - If a field is unknown, return null
 - source_url must be the public URL for the result
-- Return JSON only"""
-
-ENRICHMENT_PROMPT_TEMPLATE = """You are a market intelligence engine for solar service sales.
-
-Your task is to enrich hiring companies using public web information so a service provider knows who to contact first.
-
-For each company below, use public web information to identify the company website, careers page, relevant contact path, likely decision maker, and recommended first outreach role tied to hiring or subcontracting for the work implied by the evidence.
-
-Company evidence:
-{{COMPANY_EVIDENCE}}
-
-Return valid JSON only using this schema:
-{
-  "companies": [
-    {
-      "company_name": null,
-      "company_website": null,
-      "careers_page_url": null,
-      "public_contact_page": null,
-      "recommended_first_outreach_role": null,
-      "decision_maker_name": null,
-      "decision_maker_role": null,
-      "decision_maker_contact_info": null,
-      "hiring_signal_summary": null,
-      "enrichment_confidence": null
-    }
-  ]
-}
-
-Rules:
-- Use only public web information
-- Focus on the best first outreach contact path for a service provider offering subcontracting or specialist support
-- If a named person is not clearly available, return the best role-based contact path instead
-- decision_maker_contact_info can be an email, public contact page, recruiter page, or a public company contact route
-- enrichment_confidence should be High, Medium, Low, or null
 - Return JSON only"""
 
 
@@ -323,14 +226,6 @@ RESPONSE_SCHEMA = {
                     "matching_responsibilities": {"type": "array", "items": {"type": "string"}},
                     "matching_keywords": {"type": "array", "items": {"type": "string"}},
                     "buyer_department": {"type": ["string", "null"]},
-                    "primary_contact_name": {"type": ["string", "null"]},
-                    "primary_contact_role": {"type": ["string", "null"]},
-                    "primary_contact_info": {"type": ["string", "null"]},
-                    "contact_priority": {
-                        "type": "string",
-                        "enum": ["High", "Medium", "Low", "Unknown"],
-                    },
-                    "contact_confidence": {"type": ["string", "null"]},
                     "outreach_next_step": {"type": ["string", "null"]},
                     "source_url": {"type": ["string", "null"]},
                 },
@@ -349,11 +244,6 @@ RESPONSE_SCHEMA = {
                     "matching_responsibilities",
                     "matching_keywords",
                     "buyer_department",
-                    "primary_contact_name",
-                    "primary_contact_role",
-                    "primary_contact_info",
-                    "contact_priority",
-                    "contact_confidence",
                     "outreach_next_step",
                     "source_url",
                 ],
@@ -361,45 +251,6 @@ RESPONSE_SCHEMA = {
         }
     },
     "required": ["results"],
-}
-
-ENRICHMENT_SCHEMA = {
-    "type": "object",
-    "additionalProperties": False,
-    "properties": {
-        "companies": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "company_name": {"type": ["string", "null"]},
-                    "company_website": {"type": ["string", "null"]},
-                    "careers_page_url": {"type": ["string", "null"]},
-                    "public_contact_page": {"type": ["string", "null"]},
-                    "recommended_first_outreach_role": {"type": ["string", "null"]},
-                    "decision_maker_name": {"type": ["string", "null"]},
-                    "decision_maker_role": {"type": ["string", "null"]},
-                    "decision_maker_contact_info": {"type": ["string", "null"]},
-                    "hiring_signal_summary": {"type": ["string", "null"]},
-                    "enrichment_confidence": {"type": ["string", "null"]},
-                },
-                "required": [
-                    "company_name",
-                    "company_website",
-                    "careers_page_url",
-                    "public_contact_page",
-                    "recommended_first_outreach_role",
-                    "decision_maker_name",
-                    "decision_maker_role",
-                    "decision_maker_contact_info",
-                    "hiring_signal_summary",
-                    "enrichment_confidence",
-                ],
-            },
-        }
-    },
-    "required": ["companies"],
 }
 
 EXPANSION_PROMPT_TEMPLATE = """You are a market intelligence engine for solar service sales strategy.
@@ -788,36 +639,37 @@ def format_duration_text(seconds):
     return f"{remaining_seconds} sec"
 
 
-def estimate_company_count(service_count, high_volume_mode):
-    companies_per_service = 8 if high_volume_mode else 5
-    return max(1, service_count * companies_per_service)
+def format_duration_range_text(min_seconds, max_seconds):
+    low = format_duration_text(min_seconds)
+    high = format_duration_text(max_seconds)
+    if low == high:
+        return low
+    return f"{low} to {high}"
 
 
-def fallback_estimate_seconds(service_count, high_volume_mode, enrichment_enabled, time_window):
-    search_calls = sum(3 if high_volume_mode else 2 for _ in range(service_count))
+def fallback_estimate_seconds(service_count, high_volume_mode, time_window):
+    search_calls = sum(2 if high_volume_mode else 1 for _ in range(service_count))
     time_factor = {
         "2 weeks": 0,
         "1 month": 2,
         "2 months": 4,
         "3 months": 6,
     }.get(time_window, 4)
-    search_seconds_per_call = 18 if high_volume_mode else 12
+    search_seconds_per_call = 10 if high_volume_mode else 7
     estimate = search_calls * (search_seconds_per_call + time_factor)
-    if enrichment_enabled:
-        estimated_batches = math.ceil(estimate_company_count(service_count, high_volume_mode) / 8)
-        estimate += estimated_batches * (14 if high_volume_mode else 10)
     return int(estimate)
 
 
-def estimate_search_time(service_count, high_volume_mode, enrichment_enabled, time_window, user_id=None):
+def estimate_search_time(service_count, high_volume_mode, time_window, user_id=None):
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user or service_count <= 0:
-        return fallback_estimate_seconds(service_count, high_volume_mode, enrichment_enabled, time_window), "default"
+        base = fallback_estimate_seconds(service_count, high_volume_mode, time_window)
+        return (max(15, int(base * 0.8)), int(base * 1.3)), "default"
 
     with conn() as db:
         rows = db.execute(
             """
-            SELECT service_count, high_volume_mode, enrichment_enabled, duration_seconds
+            SELECT service_count, high_volume_mode, duration_seconds
             FROM searches
             WHERE user_id = ? AND duration_seconds IS NOT NULL
             ORDER BY id DESC
@@ -832,21 +684,24 @@ def estimate_search_time(service_count, high_volume_mode, enrichment_enabled, ti
         for row in history
         if int(row["service_count"] or 0) == int(service_count)
         and int(row["high_volume_mode"] or 0) == int(high_volume_mode)
-        and int(row["enrichment_enabled"] or 0) == int(enrichment_enabled)
     ]
     if exact_matches:
-        return int(round(statistics.median(exact_matches))), "history"
+        median_seconds = int(round(statistics.median(exact_matches)))
+        spread = max(10, int(median_seconds * 0.2))
+        return (max(10, median_seconds - spread), median_seconds + spread), "history"
 
     similar_runs = [
         float(row["duration_seconds"]) / max(1, int(row["service_count"] or 1))
         for row in history
         if int(row["high_volume_mode"] or 0) == int(high_volume_mode)
-        and int(row["enrichment_enabled"] or 0) == int(enrichment_enabled)
     ]
     if similar_runs:
-        return int(round(statistics.median(similar_runs) * service_count)), "history"
+        median_seconds = int(round(statistics.median(similar_runs) * service_count))
+        spread = max(15, int(median_seconds * 0.25))
+        return (max(15, median_seconds - spread), median_seconds + spread), "history"
 
-    return fallback_estimate_seconds(service_count, high_volume_mode, enrichment_enabled, time_window), "default"
+    base = fallback_estimate_seconds(service_count, high_volume_mode, time_window)
+    return (max(15, int(base * 0.8)), int(base * 1.3)), "default"
 
 
 def stripe_ready():
@@ -989,12 +844,9 @@ def search_variants(service_row, high_volume_mode):
     base_description = safe_text(service_row["service_description"])
     service_name = safe_text(service_row["service_name"])
     variants = [base_description]
-    variants.append(
-        f"{service_name}\n\nFocus on role-title variants, adjacent responsibilities, and public ATS or company careers pages tied to this service."
-    )
     if high_volume_mode:
         variants.append(
-            f"{service_name}\n\nFocus on adjacent solar job titles, field operations, project delivery, QA/QC, commissioning, procurement, subcontractor management, and owner or EPC hiring signals related to this service."
+            f"{service_name}\n\nFocus on role-title variants, adjacent responsibilities, company careers pages, ATS pages, and strong hiring signals tied to this service."
         )
     return variants
 
@@ -1027,7 +879,7 @@ def search_service(api_client, service_row, location_filter, time_window, high_v
     collected_records = []
     for idx, variant_description in enumerate(search_variants(service_row, high_volume_mode), start=1):
         response = api_client.responses.create(
-            model="gpt-5",
+            model=DISCOVERY_MODEL,
             reasoning={"effort": "low"},
             tools=[{"type": "web_search", "user_location": {"type": "approximate", "country": "US", "timezone": "America/New_York"}}],
             tool_choice="auto",
@@ -1087,7 +939,7 @@ def analyze_expansions(api_client, selected_services_df, evidence_df):
     prompt = prompt.replace("{{MARKET_EVIDENCE}}", market_evidence_json)
 
     response = api_client.responses.create(
-        model="gpt-5",
+        model=SYNTHESIS_MODEL,
         reasoning={"effort": "low"},
         input=prompt,
         text={
@@ -1123,96 +975,6 @@ def ensure_evidence_columns(evidence_df):
         if column not in working.columns:
             working[column] = None
     return working[EVIDENCE_COLUMNS]
-
-
-def build_enrichment_payload(evidence_df):
-    payload = []
-    grouped = evidence_df.groupby("company_name", dropna=False)
-    for company_name, group in grouped:
-        top_group = group.sort_values("match_score", ascending=False).head(5)
-        payload.append(
-            {
-                "company_name": safe_text(company_name, "Unknown Company"),
-                "matched_services": flatten_unique(group["matched_service"].tolist()),
-                "job_titles": flatten_unique(top_group["job_title"].tolist()),
-                "buyer_departments": flatten_unique(top_group["buyer_department"].tolist()),
-                "locations": flatten_unique(top_group["location"].tolist()),
-                "sample_responsibilities": flatten_unique(top_group["matching_responsibilities"].tolist())[:8],
-                "sample_keywords": flatten_unique(top_group["matching_keywords"].tolist())[:8],
-                "source_urls": flatten_unique(top_group["source_url"].tolist())[:5],
-            }
-        )
-    return payload
-
-
-def enrich_company_batch(api_client, company_payload):
-    prompt = ENRICHMENT_PROMPT_TEMPLATE.replace(
-        "{{COMPANY_EVIDENCE}}",
-        json.dumps(company_payload, indent=2),
-    )
-    response = api_client.responses.create(
-        model="gpt-5",
-        reasoning={"effort": "low"},
-        tools=[{"type": "web_search", "user_location": {"type": "approximate", "country": "US", "timezone": "America/New_York"}}],
-        tool_choice="auto",
-        include=["web_search_call.action.sources"],
-        input=prompt,
-        text={"format": {"type": "json_schema", "name": "nextstep_company_enrichment", "strict": True, "schema": ENRICHMENT_SCHEMA}},
-    )
-    raw_json = response.output_text if getattr(response, "output_text", None) else ""
-    try:
-        parsed = json.loads(raw_json)
-    except json.JSONDecodeError as exc:
-        raise ValueError("The API returned invalid JSON for company enrichment.") from exc
-    return raw_json, parsed.get("companies", [])
-
-
-def enrich_evidence_with_company_profiles(api_client, evidence_df, batch_callback=None):
-    if evidence_df.empty:
-        return [], evidence_df
-
-    company_payload = build_enrichment_payload(evidence_df)
-    raw_responses = []
-    enriched_rows = []
-    total_batches = max(1, math.ceil(len(company_payload) / 8))
-    for batch_index, start in enumerate(range(0, len(company_payload), 8), start=1):
-        batch = company_payload[start:start + 8]
-        if batch_callback:
-            batch_callback(batch_index, total_batches)
-        raw_json, batch_rows = enrich_company_batch(api_client, batch)
-        raw_responses.append(raw_json)
-        enriched_rows.extend(batch_rows)
-
-    if not enriched_rows:
-        return raw_responses, ensure_evidence_columns(evidence_df)
-
-    enrichment_df = pd.DataFrame(enriched_rows)
-    if enrichment_df.empty:
-        return raw_responses, ensure_evidence_columns(evidence_df)
-
-    rename_map = {"company_name": "enrichment_company_name"}
-    enrichment_df = enrichment_df.rename(columns=rename_map)
-    merged = evidence_df.merge(
-        enrichment_df,
-        how="left",
-        left_on="company_name",
-        right_on="enrichment_company_name",
-    )
-    merged = merged.drop(columns=["enrichment_company_name"], errors="ignore")
-    for column in [
-        "company_website",
-        "careers_page_url",
-        "public_contact_page",
-        "recommended_first_outreach_role",
-        "decision_maker_name",
-        "decision_maker_role",
-        "decision_maker_contact_info",
-        "hiring_signal_summary",
-        "enrichment_confidence",
-    ]:
-        if column not in merged.columns:
-            merged[column] = None
-    return raw_responses, ensure_evidence_columns(merged)
 
 
 def flatten_unique(values):
@@ -1258,101 +1020,27 @@ def aggregate_companies(evidence_df):
     for company, group in temp.groupby("company_name", dropna=False):
         best = group.sort_values("match_score", ascending=False).iloc[0]
         matched_services = flatten_unique(group["matched_service"].tolist())
-        reasons = flatten_unique(group["why_it_matches"].tolist())[:3]
-        keywords = flatten_unique(group["matching_keywords"].tolist())[:4]
         urls = flatten_unique(group["source_url"].tolist())[:5]
-        contacts = flatten_unique(
-            [
-                f"{safe_text(name)} ({safe_text(role)})"
-                if safe_text(name) and safe_text(role)
-                else safe_text(name) or safe_text(role)
-                for name, role in zip(
-                    group["primary_contact_name"].tolist(),
-                    group["primary_contact_role"].tolist(),
-                )
-            ]
-        )
-        contact_info_values = flatten_unique(group["primary_contact_info"].tolist())[:3]
-        contact_priority_series = [x for x in group["contact_priority"] if pd.notna(x) and str(x).strip()]
-        priority_rank = {"High": 3, "Medium": 2, "Low": 1, "Unknown": 0}
-        best_contact_priority = max(contact_priority_series, key=lambda x: priority_rank.get(x, 0)) if contact_priority_series else "Unknown"
         direct = int((group["match_type"] == "Direct").sum())
         peripheral = int((group["match_type"] == "Peripheral").sum())
-        score = min(100, int(group["match_score"].max()) + min(len(group) - 1, 4) * 5 + min(direct, 2) * 5 + min(peripheral, 2) * 3)
-        latest = group["posted_date_parsed"].max()
-        best_outreach_step = next(
-            (
-                value
-                for value in group["outreach_next_step"].tolist()
-                if pd.notna(value) and str(value).strip()
-            ),
-            None,
+        score = min(
+            100,
+            int(group["match_score"].max()) + min(len(group) - 1, 4) * 5 + min(direct, 2) * 5 + min(peripheral, 2) * 3,
         )
-        company_website = next((safe_text(value) for value in group["company_website"].tolist() if safe_text(value)), "")
-        careers_page_url = next((safe_text(value) for value in group["careers_page_url"].tolist() if safe_text(value)), "")
-        public_contact_page = next((safe_text(value) for value in group["public_contact_page"].tolist() if safe_text(value)), "")
-        recommended_first_outreach_role = next(
-            (safe_text(value) for value in group["recommended_first_outreach_role"].tolist() if safe_text(value)),
-            "",
+        likely_buyer_department = (
+            pd.Series([x for x in group["buyer_department"] if pd.notna(x) and str(x).strip()]).mode().iloc[0]
+            if any(pd.notna(group["buyer_department"]))
+            else None
         )
-        decision_maker_name = next(
-            (safe_text(value) for value in group["decision_maker_name"].tolist() if safe_text(value)),
-            "",
-        )
-        decision_maker_role = next(
-            (safe_text(value) for value in group["decision_maker_role"].tolist() if safe_text(value)),
-            "",
-        )
-        decision_maker_contact_info = next(
-            (safe_text(value) for value in group["decision_maker_contact_info"].tolist() if safe_text(value)),
-            "",
-        )
-        hiring_signal_summary = next(
-            (safe_text(value) for value in group["hiring_signal_summary"].tolist() if safe_text(value)),
-            "",
-        )
-        enrichment_confidence = next(
-            (safe_text(value) for value in group["enrichment_confidence"].tolist() if safe_text(value)),
-            "",
-        )
-        chosen_priority_contact = (
-            f"{decision_maker_name} ({decision_maker_role})"
-            if decision_maker_name and decision_maker_role
-            else decision_maker_name or decision_maker_role or " | ".join(contacts[:3])
-        )
-        chosen_contact_info = decision_maker_contact_info or " | ".join(contact_info_values)
-        chosen_outreach_step = safe_text(best_outreach_step) or (
-            f"Start with the {recommended_first_outreach_role} pathway and use the public careers or contact route to reach the hiring or subcontracting owner."
-            if recommended_first_outreach_role
-            else ""
-        )
+        best_postings = flatten_unique(group.sort_values("match_score", ascending=False)["job_title"].tolist())[:5]
         rows.append(
             {
-                "client2_company": safe_text(company, "Unknown Company"),
+                "buyer_company": safe_text(company, "Unknown Company"),
+                "job_posting_title": safe_text(best["job_title"]),
                 "matched_services": "; ".join(matched_services),
                 "opportunity_score": score,
-                "signal_strength": signal_label(score),
-                "matching_post_count": int(len(group)),
-                "open_roles_found": int((group["opportunity_status"] == "Open").sum()),
-                "filled_roles_found": int((group["opportunity_status"] == "Filled").sum()),
-                "latest_posted_date": latest.strftime("%Y-%m-%d") if pd.notna(latest) else safe_text(best["posted_date"]),
-                "best_matching_posting": safe_text(best["job_title"]),
-                "likely_buyer_department": pd.Series([x for x in group["buyer_department"] if pd.notna(x) and str(x).strip()]).mode().iloc[0] if any(pd.notna(group["buyer_department"])) else None,
-                "priority_contact": chosen_priority_contact,
-                "priority_contact_info": chosen_contact_info,
-                "contact_priority": best_contact_priority,
-                "company_website": company_website,
-                "careers_page_url": careers_page_url,
-                "public_contact_page": public_contact_page,
-                "recommended_first_outreach_role": recommended_first_outreach_role,
-                "decision_maker_name": decision_maker_name,
-                "decision_maker_role": decision_maker_role,
-                "decision_maker_contact_info": decision_maker_contact_info,
-                "hiring_signal_summary": hiring_signal_summary,
-                "enrichment_confidence": enrichment_confidence,
-                "why_this_company_is_a_fit": " | ".join(reasons) if reasons else safe_text(best["likely_service_need"]),
-                "suggested_outreach_angle": f"Lead with {', '.join(matched_services[:2]) or 'this service'} support and reference {safe_text(best['job_title'], 'recent hiring activity')} tied to {', '.join(keywords[:3]) or 'recent buyer signals'}.",
-                "outreach_next_step": chosen_outreach_step,
+                "likely_buyer_department_general": likely_buyer_department,
+                "best_matching_postings": " | ".join(best_postings),
                 "source_urls": " | ".join(urls),
             }
         )
@@ -1403,7 +1091,7 @@ def csv_data(df):
     return buffer.getvalue()
 
 
-def pdf_data(company_df, evidence_df, meta):
+def pdf_data(company_df, meta):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
@@ -1416,39 +1104,19 @@ def pdf_data(company_df, evidence_df, meta):
         Paragraph(escape(f"Location filter: {meta['location_filter']}"), styles["Normal"]),
         Paragraph(escape(f"Time window: {meta['time_window']} | Search mode: {meta['mode']}"), styles["Normal"]),
         Spacer(1, 14),
-        Paragraph("Company Opportunities", styles["Heading1"]),
+        Paragraph("Buyer Company List", styles["Heading1"]),
     ]
     for _, row in company_df.head(20).iterrows():
         story.extend(
             [
-                Paragraph(escape(str(row["client2_company"])), styles["Heading2"]),
-                Paragraph(escape(f"Opportunity score: {row['opportunity_score']} ({row['signal_strength']})"), styles["Normal"]),
+                Paragraph(escape(str(row["buyer_company"])), styles["Heading2"]),
+                Paragraph(escape(f"Job posting title: {row['job_posting_title'] or 'Unknown'}"), styles["Normal"]),
+                Paragraph(escape(f"Opportunity score: {row['opportunity_score']}"), styles["Normal"]),
                 Paragraph(escape(f"Matched services: {row['matched_services']}"), styles["Normal"]),
-                Paragraph(escape(f"Open roles: {row['open_roles_found']} | Filled roles: {row['filled_roles_found']} | Matching posts: {row['matching_post_count']}"), styles["Normal"]),
-                Paragraph(escape(f"Likely buyer department: {row['likely_buyer_department'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Priority contact: {row['priority_contact'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Contact info: {row['priority_contact_info'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Contact priority: {row['contact_priority'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Why this company is a fit: {row['why_this_company_is_a_fit'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Suggested outreach angle: {row['suggested_outreach_angle'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Outreach next step: {row['outreach_next_step'] or 'Unknown'}"), styles["Normal"]),
+                Paragraph(escape(f"Likely buyer department: {row['likely_buyer_department_general'] or 'Unknown'}"), styles["Normal"]),
+                Paragraph(escape(f"Best matching posting: {row['best_matching_postings'] or 'Unknown'}"), styles["Normal"]),
                 Paragraph(escape(f"Source URLs: {row['source_urls'] or 'Unknown'}"), styles["Normal"]),
                 Spacer(1, 10),
-            ]
-        )
-    story.append(Paragraph("Evidence Snapshot", styles["Heading1"]))
-    for _, row in evidence_df.head(25).iterrows():
-        story.extend(
-            [
-                Paragraph(escape(f"{row['company_name']} - {row['job_title']}"), styles["Heading2"]),
-                Paragraph(escape(f"Matched service: {row['matched_service']} | Match score: {row['match_score']} | Match type: {row['match_type']} | Status: {row['opportunity_status']}"), styles["Normal"]),
-                Paragraph(escape(f"Likely service need: {row['likely_service_need'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Primary contact: {row['primary_contact_name'] or 'Unknown'} | Role: {row['primary_contact_role'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Contact info: {row['primary_contact_info'] or 'Unknown'} | Priority: {row['contact_priority'] or 'Unknown'} | Confidence: {row['contact_confidence'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Outreach next step: {row['outreach_next_step'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Why it matches: {row['why_it_matches']}"), styles["Normal"]),
-                Paragraph(escape(f"Source URL: {row['source_url'] or 'Unknown'}"), styles["Normal"]),
-                Spacer(1, 8),
             ]
         )
     doc.build(story)
@@ -1489,34 +1157,27 @@ def expansion_pdf_data(expansion_df, meta):
     return buffer.getvalue()
 
 
-def show_run(run_record, top_only, key_prefix):
+def show_run(run_record, key_prefix):
     evidence_df = ensure_evidence_columns(load_df(run_record["evidence_json"]))
     if evidence_df.empty:
         st.info("This list has no saved evidence.")
         return
-    if top_only:
-        evidence_df = evidence_df[evidence_df["match_type"].isin(["Direct", "Peripheral"])].reset_index(drop=True)
-    if evidence_df.empty:
-        st.info("No results matched the current filters.")
-        return
 
     company_df = aggregate_companies(evidence_df)
-    display_evidence = format_lists_for_display(evidence_df)
 
-    st.subheader("Company Opportunities")
+    st.subheader("Buyer Company List")
     st.dataframe(pretty_df(company_df), use_container_width=True)
     st.download_button(
-        "Download company opportunities as CSV",
+        "Download buyer company list as CSV",
         data=csv_data(company_df),
-        file_name=f"nextstep_company_opportunities_{run_record['id']}.csv",
+        file_name=f"nextstep_buyer_company_list_{run_record['id']}.csv",
         mime="text/csv",
         key=f"{key_prefix}_company_csv",
     )
     st.download_button(
-        "Download company opportunities as PDF",
+        "Download buyer company list as PDF",
         data=pdf_data(
             company_df,
-            display_evidence,
             {
                 "run_name": run_record["run_name"],
                 "created_at": run_record["created_at"],
@@ -1529,15 +1190,6 @@ def show_run(run_record, top_only, key_prefix):
         file_name=f"nextstep_opportunity_report_{run_record['id']}.pdf",
         mime="application/pdf",
         key=f"{key_prefix}_company_pdf",
-    )
-    st.subheader("Supporting Evidence")
-    st.dataframe(pretty_df(display_evidence), use_container_width=True)
-    st.download_button(
-        "Download supporting evidence as CSV",
-        data=csv_data(display_evidence),
-        file_name=f"nextstep_supporting_evidence_{run_record['id']}.csv",
-        mime="text/csv",
-        key=f"{key_prefix}_evidence_csv",
     )
 
 
@@ -1730,22 +1382,17 @@ def page_generate():
     location_filter = st.text_input("Location filter", value="Any U.S. location")
     time_window = st.selectbox("Time window", TIME_OPTIONS, index=2)
     high_volume = st.checkbox("High volume mode (broader search, more opportunities, lower precision)", value=True)
-    include_enrichment = st.checkbox(
-        "Include company contact research (slower, adds websites and contact guidance)",
-        value=True,
-    )
-    top_only = st.checkbox("Show only Direct and Peripheral evidence", value=True)
     credits_needed = len(selected) * (2 if high_volume else 1)
-    estimated_seconds, estimate_basis = estimate_search_time(
+    estimated_range, estimate_basis = estimate_search_time(
         len(selected),
         high_volume,
-        include_enrichment,
         time_window,
     )
     basis_text = "based on your recent runs" if estimate_basis == "history" else "based on current settings"
     st.caption(
-        f"Credits needed: {credits_needed} | Credits remaining: {credits()} | Estimated search time: {format_duration_text(estimated_seconds)} ({basis_text})"
+        f"Credits needed: {credits_needed} | Credits remaining: {credits()} | Estimated search time: {format_duration_range_text(estimated_range[0], estimated_range[1])} ({basis_text})"
     )
+    st.caption("Search time can still vary because live web search depends on outside websites and OpenAI response time.")
 
     if st.button("Generate and save list", type="primary"):
         if not selected:
@@ -1781,18 +1428,7 @@ def page_generate():
                 st.info(f"No matching U.S. results from the last {time_window} were found.")
                 return
             evidence_df = ensure_evidence_columns(evidence_df)
-            if include_enrichment:
-                progress.progress(75, text="Running company contact research...")
-                _, evidence_df = enrich_evidence_with_company_profiles(
-                    api_client,
-                    evidence_df,
-                    batch_callback=lambda batch_index, total_batches: progress.progress(
-                        75 + int((batch_index / max(1, total_batches)) * 20),
-                        text=f"Researching company contacts {batch_index} of {total_batches}",
-                    ),
-                )
-            else:
-                progress.progress(90, text="Skipping company contact research for a faster run...")
+            progress.progress(90, text="Ranking and organizing results...")
             evidence_df = evidence_df.sort_values("match_score", ascending=False).reset_index(drop=True)
             company_df = aggregate_companies(evidence_df)
             duration_seconds = time.time() - start_time
@@ -1803,7 +1439,7 @@ def page_generate():
                 location_filter=location_filter,
                 time_window=time_window,
                 high_volume_mode=high_volume,
-                enrichment_enabled=include_enrichment,
+                enrichment_enabled=False,
                 credits_used=credits_needed,
                 duration_seconds=duration_seconds,
                 company_df=company_df,
@@ -1814,7 +1450,7 @@ def page_generate():
             st.success(
                 f"Saved list #{run_id} created in {format_duration_text(duration_seconds)}. Credits remaining: {remaining}"
             )
-            show_run(get_run(run_id), top_only, f"new_{run_id}")
+            show_run(get_run(run_id), f"new_{run_id}")
             with st.expander("Raw search responses"):
                 for idx, raw_json in enumerate(raw_search_responses, start=1):
                     st.markdown(f"**Search response {idx}**")
@@ -1832,8 +1468,8 @@ def page_saved_lists():
         st.info("No saved lists yet.")
         return
 
-    master_company_df, master_evidence_df = build_master_saved_data()
-    if not master_company_df.empty and not master_evidence_df.empty:
+    master_company_df, _ = build_master_saved_data()
+    if not master_company_df.empty:
         st.markdown("**Master exports**")
         st.dataframe(pretty_df(master_company_df), use_container_width=True)
         st.download_button(
@@ -1842,13 +1478,6 @@ def page_saved_lists():
             file_name="nextstep_master_company_list.csv",
             mime="text/csv",
             key="master_company_csv",
-        )
-        st.download_button(
-            "Download master evidence list as CSV",
-            data=csv_data(format_lists_for_display(master_evidence_df)),
-            file_name="nextstep_master_evidence_list.csv",
-            mime="text/csv",
-            key="master_evidence_csv",
         )
 
     display_runs = runs[
@@ -1874,8 +1503,7 @@ def page_saved_lists():
             if row["id"] == rid
         ),
     )
-    top_only = st.checkbox("Show only Direct and Peripheral evidence", value=True, key="saved_top_only")
-    show_run(get_run(selected_id), top_only, f"saved_{selected_id}")
+    show_run(get_run(selected_id), f"saved_{selected_id}")
 
 
 def page_potential_expansions():

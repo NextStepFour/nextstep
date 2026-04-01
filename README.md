@@ -8,15 +8,14 @@ Simple Streamlit portal for generating and saving solar service prospect lists w
 2. Generate prospect lists using credits
 3. Search by service, location, time window, and search mode
 4. Show an estimated search time before each run
-5. Optionally skip company contact research for faster list generation
-6. Group results into company-level opportunities
-7. Surface likely buyer contacts, contact info, contact priority, and outreach next steps
-8. Suggest potential service expansions based on repeated adjacent market signals
-9. Let users create accounts and sign in
-10. Support Stripe subscription checkout and billing status refresh
-11. Retain saved lists inside the portal
-12. Export company opportunities as CSV or PDF
-13. Export supporting evidence as CSV
+5. Group results into company-level opportunities
+6. Surface likely buyer departments and practical outreach next steps
+7. Suggest potential service expansions based on repeated adjacent market signals
+8. Let users create accounts and sign in
+9. Support Stripe subscription checkout and billing status refresh
+10. Retain saved lists inside the portal
+11. Export company opportunities as CSV or PDF
+12. Export supporting evidence as CSV
 
 ## Portal sections
 
