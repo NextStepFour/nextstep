@@ -4,6 +4,9 @@ import os
 import sqlite3
 import hashlib
 import hmac
+import math
+import statistics
+import time
 from datetime import datetime
 from xml.sax.saxutils import escape
 
@@ -157,6 +160,7 @@ DISPLAY_NAME_MAP = {
     "mode": "Search Mode",
     "credits_used": "Credits Used",
     "created_at": "Created At",
+    "estimated_search_time": "Actual Search Time",
     "default_time_window": "Default Time Window",
     "target_location": "Target Location",
     "service_name": "Service Name",
@@ -527,10 +531,13 @@ def init_db():
                 user_id INTEGER,
                 run_name TEXT NOT NULL,
                 services_text TEXT NOT NULL,
+                service_count INTEGER NOT NULL DEFAULT 0,
                 location_filter TEXT NOT NULL,
                 time_window TEXT NOT NULL,
                 high_volume_mode INTEGER NOT NULL,
+                enrichment_enabled INTEGER NOT NULL DEFAULT 1,
                 credits_used INTEGER NOT NULL,
+                duration_seconds REAL,
                 created_at TEXT NOT NULL,
                 company_json TEXT NOT NULL,
                 evidence_json TEXT NOT NULL
@@ -547,6 +554,12 @@ def init_db():
         search_columns = [row["name"] for row in db.execute("PRAGMA table_info(searches)").fetchall()]
         if "user_id" not in search_columns:
             db.execute("ALTER TABLE searches ADD COLUMN user_id INTEGER")
+        if "service_count" not in search_columns:
+            db.execute("ALTER TABLE searches ADD COLUMN service_count INTEGER NOT NULL DEFAULT 0")
+        if "enrichment_enabled" not in search_columns:
+            db.execute("ALTER TABLE searches ADD COLUMN enrichment_enabled INTEGER NOT NULL DEFAULT 1")
+        if "duration_seconds" not in search_columns:
+            db.execute("ALTER TABLE searches ADD COLUMN duration_seconds REAL")
 
 
 def hash_password(password):
@@ -667,6 +680,8 @@ def runs_df(user_id=None):
     df = pd.DataFrame([dict(r) for r in rows])
     if not df.empty:
         df["mode"] = df["high_volume_mode"].map({1: "High volume", 0: "Focused"})
+        if "duration_seconds" in df.columns:
+            df["estimated_search_time"] = df["duration_seconds"].apply(format_duration_text)
     return df
 
 
@@ -705,7 +720,20 @@ def save_service(name, description, location_filter, time_window, user_id=None):
         )
 
 
-def save_run(run_name, services_text, location_filter, time_window, high_volume_mode, credits_used, company_df, evidence_df, user_id=None):
+def save_run(
+    run_name,
+    services_text,
+    service_count,
+    location_filter,
+    time_window,
+    high_volume_mode,
+    enrichment_enabled,
+    credits_used,
+    duration_seconds,
+    company_df,
+    evidence_df,
+    user_id=None,
+):
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user:
         raise ValueError("Please sign in to save lists.")
@@ -713,18 +741,22 @@ def save_run(run_name, services_text, location_filter, time_window, high_volume_
         cursor = db.execute(
             """
             INSERT INTO searches (
-                user_id, run_name, services_text, location_filter, time_window,
-                high_volume_mode, credits_used, created_at, company_json, evidence_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                user_id, run_name, services_text, service_count, location_filter, time_window,
+                high_volume_mode, enrichment_enabled, credits_used, duration_seconds,
+                created_at, company_json, evidence_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user["id"],
                 run_name,
                 services_text,
+                int(service_count),
                 location_filter,
                 time_window,
                 int(high_volume_mode),
+                int(enrichment_enabled),
                 credits_used,
+                float(duration_seconds) if duration_seconds is not None else None,
                 datetime.now().strftime("%Y-%m-%d %H:%M"),
                 company_df.to_json(orient="records"),
                 evidence_df.to_json(orient="records"),
@@ -742,6 +774,79 @@ def client():
     if not api_key:
         raise ValueError("OPENAI_API_KEY is not set.")
     return OpenAI(api_key=api_key)
+
+
+def format_duration_text(seconds):
+    if seconds is None or pd.isna(seconds):
+        return ""
+    total_seconds = max(0, int(round(float(seconds))))
+    minutes, remaining_seconds = divmod(total_seconds, 60)
+    if minutes and remaining_seconds:
+        return f"{minutes} min {remaining_seconds} sec"
+    if minutes:
+        return f"{minutes} min"
+    return f"{remaining_seconds} sec"
+
+
+def estimate_company_count(service_count, high_volume_mode):
+    companies_per_service = 8 if high_volume_mode else 5
+    return max(1, service_count * companies_per_service)
+
+
+def fallback_estimate_seconds(service_count, high_volume_mode, enrichment_enabled, time_window):
+    search_calls = sum(3 if high_volume_mode else 2 for _ in range(service_count))
+    time_factor = {
+        "2 weeks": 0,
+        "1 month": 2,
+        "2 months": 4,
+        "3 months": 6,
+    }.get(time_window, 4)
+    search_seconds_per_call = 18 if high_volume_mode else 12
+    estimate = search_calls * (search_seconds_per_call + time_factor)
+    if enrichment_enabled:
+        estimated_batches = math.ceil(estimate_company_count(service_count, high_volume_mode) / 8)
+        estimate += estimated_batches * (14 if high_volume_mode else 10)
+    return int(estimate)
+
+
+def estimate_search_time(service_count, high_volume_mode, enrichment_enabled, time_window, user_id=None):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user or service_count <= 0:
+        return fallback_estimate_seconds(service_count, high_volume_mode, enrichment_enabled, time_window), "default"
+
+    with conn() as db:
+        rows = db.execute(
+            """
+            SELECT service_count, high_volume_mode, enrichment_enabled, duration_seconds
+            FROM searches
+            WHERE user_id = ? AND duration_seconds IS NOT NULL
+            ORDER BY id DESC
+            LIMIT 30
+            """,
+            (user["id"],),
+        ).fetchall()
+
+    history = [dict(row) for row in rows]
+    exact_matches = [
+        float(row["duration_seconds"])
+        for row in history
+        if int(row["service_count"] or 0) == int(service_count)
+        and int(row["high_volume_mode"] or 0) == int(high_volume_mode)
+        and int(row["enrichment_enabled"] or 0) == int(enrichment_enabled)
+    ]
+    if exact_matches:
+        return int(round(statistics.median(exact_matches))), "history"
+
+    similar_runs = [
+        float(row["duration_seconds"]) / max(1, int(row["service_count"] or 1))
+        for row in history
+        if int(row["high_volume_mode"] or 0) == int(high_volume_mode)
+        and int(row["enrichment_enabled"] or 0) == int(enrichment_enabled)
+    ]
+    if similar_runs:
+        return int(round(statistics.median(similar_runs) * service_count)), "history"
+
+    return fallback_estimate_seconds(service_count, high_volume_mode, enrichment_enabled, time_window), "default"
 
 
 def stripe_ready():
@@ -1062,15 +1167,18 @@ def enrich_company_batch(api_client, company_payload):
     return raw_json, parsed.get("companies", [])
 
 
-def enrich_evidence_with_company_profiles(api_client, evidence_df):
+def enrich_evidence_with_company_profiles(api_client, evidence_df, batch_callback=None):
     if evidence_df.empty:
         return [], evidence_df
 
     company_payload = build_enrichment_payload(evidence_df)
     raw_responses = []
     enriched_rows = []
-    for start in range(0, len(company_payload), 8):
+    total_batches = max(1, math.ceil(len(company_payload) / 8))
+    for batch_index, start in enumerate(range(0, len(company_payload), 8), start=1):
         batch = company_payload[start:start + 8]
+        if batch_callback:
+            batch_callback(batch_index, total_batches)
         raw_json, batch_rows = enrich_company_batch(api_client, batch)
         raw_responses.append(raw_json)
         enriched_rows.extend(batch_rows)
@@ -1578,6 +1686,7 @@ def page_dashboard():
                         "location_filter",
                         "time_window",
                         "mode",
+                        "estimated_search_time",
                         "credits_used",
                         "created_at",
                     ]
@@ -1621,9 +1730,22 @@ def page_generate():
     location_filter = st.text_input("Location filter", value="Any U.S. location")
     time_window = st.selectbox("Time window", TIME_OPTIONS, index=2)
     high_volume = st.checkbox("High volume mode (broader search, more opportunities, lower precision)", value=True)
+    include_enrichment = st.checkbox(
+        "Include company contact research (slower, adds websites and contact guidance)",
+        value=True,
+    )
     top_only = st.checkbox("Show only Direct and Peripheral evidence", value=True)
     credits_needed = len(selected) * (2 if high_volume else 1)
-    st.caption(f"Credits needed: {credits_needed} | Credits remaining: {credits()}")
+    estimated_seconds, estimate_basis = estimate_search_time(
+        len(selected),
+        high_volume,
+        include_enrichment,
+        time_window,
+    )
+    basis_text = "based on your recent runs" if estimate_basis == "history" else "based on current settings"
+    st.caption(
+        f"Credits needed: {credits_needed} | Credits remaining: {credits()} | Estimated search time: {format_duration_text(estimated_seconds)} ({basis_text})"
+    )
 
     if st.button("Generate and save list", type="primary"):
         if not selected:
@@ -1636,37 +1758,62 @@ def page_generate():
             api_client = client()
             all_records = []
             raw_search_responses = []
-            with st.spinner("Searching the public web and building your saved list..."):
-                for label in selected:
-                    raw_json_list, records = search_service(
-                        api_client,
-                        options[label],
-                        location_filter,
-                        time_window,
-                        high_volume,
-                    )
-                    raw_search_responses.extend(raw_json_list)
-                    all_records.extend(records)
+            start_time = time.time()
+            progress = st.progress(0, text="Starting search...")
+            for index, label in enumerate(selected, start=1):
+                progress_percent = int(((index - 1) / max(1, len(selected))) * 70)
+                progress.progress(
+                    progress_percent,
+                    text=f"Searching service {index} of {len(selected)}: {options[label]['service_name']}",
+                )
+                raw_json_list, records = search_service(
+                    api_client,
+                    options[label],
+                    location_filter,
+                    time_window,
+                    high_volume,
+                )
+                raw_search_responses.extend(raw_json_list)
+                all_records.extend(records)
             evidence_df = pd.DataFrame(all_records)
             if evidence_df.empty:
+                progress.empty()
                 st.info(f"No matching U.S. results from the last {time_window} were found.")
                 return
             evidence_df = ensure_evidence_columns(evidence_df)
-            _, evidence_df = enrich_evidence_with_company_profiles(api_client, evidence_df)
+            if include_enrichment:
+                progress.progress(75, text="Running company contact research...")
+                _, evidence_df = enrich_evidence_with_company_profiles(
+                    api_client,
+                    evidence_df,
+                    batch_callback=lambda batch_index, total_batches: progress.progress(
+                        75 + int((batch_index / max(1, total_batches)) * 20),
+                        text=f"Researching company contacts {batch_index} of {total_batches}",
+                    ),
+                )
+            else:
+                progress.progress(90, text="Skipping company contact research for a faster run...")
             evidence_df = evidence_df.sort_values("match_score", ascending=False).reset_index(drop=True)
             company_df = aggregate_companies(evidence_df)
+            duration_seconds = time.time() - start_time
             run_id = save_run(
                 run_name=f"{datetime.now().strftime('%Y-%m-%d %H:%M')} | {len(selected)} service(s)",
                 services_text="; ".join([options[label]["service_name"] for label in selected]),
+                service_count=len(selected),
                 location_filter=location_filter,
                 time_window=time_window,
                 high_volume_mode=high_volume,
+                enrichment_enabled=include_enrichment,
                 credits_used=credits_needed,
+                duration_seconds=duration_seconds,
                 company_df=company_df,
                 evidence_df=evidence_df,
             )
             remaining = add_credits(-credits_needed)
-            st.success(f"Saved list #{run_id} created. Credits remaining: {remaining}")
+            progress.progress(100, text="List complete.")
+            st.success(
+                f"Saved list #{run_id} created in {format_duration_text(duration_seconds)}. Credits remaining: {remaining}"
+            )
             show_run(get_run(run_id), top_only, f"new_{run_id}")
             with st.expander("Raw search responses"):
                 for idx, raw_json in enumerate(raw_search_responses, start=1):
@@ -1705,7 +1852,17 @@ def page_saved_lists():
         )
 
     display_runs = runs[
-        ["id", "run_name", "services_text", "location_filter", "time_window", "mode", "credits_used", "created_at"]
+        [
+            "id",
+            "run_name",
+            "services_text",
+            "location_filter",
+            "time_window",
+            "mode",
+            "estimated_search_time",
+            "credits_used",
+            "created_at",
+        ]
     ].copy()
     st.dataframe(pretty_df(display_runs), use_container_width=True)
     selected_id = st.selectbox(
