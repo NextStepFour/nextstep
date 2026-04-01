@@ -1,6 +1,6 @@
-# NextStep
+# NextStepSignal
 
-Simple Streamlit portal for generating and saving solar service prospect lists with user accounts and Stripe billing support.
+Simple Streamlit portal for generating and saving market intelligence prospect lists with user accounts and Stripe billing support.
 
 ## What it does
 

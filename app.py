@@ -126,7 +126,7 @@ DISPLAY_NAME_MAP = {
     "source_services": "Source Services",
 }
 
-st.set_page_config(page_title="NextStep", layout="wide")
+st.set_page_config(page_title="NextStepSignal", layout="wide")
 
 
 PROMPT_TEMPLATE = """You are a market intelligence engine for solar service sales.
@@ -1107,7 +1107,7 @@ def pdf_data(company_df, meta):
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
     story = [
-        Paragraph("NextStep Opportunity Report", styles["Title"]),
+        Paragraph("NextStepSignal Opportunity Report", styles["Title"]),
         Spacer(1, 10),
         Paragraph(escape(f"Run name: {meta['run_name']}"), styles["Normal"]),
         Paragraph(escape(f"Generated: {meta['created_at']}"), styles["Normal"]),
@@ -1140,7 +1140,7 @@ def expansion_pdf_data(expansion_df, meta):
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
     story = [
-        Paragraph("NextStep Potential Expansions Report", styles["Title"]),
+        Paragraph("NextStepSignal Potential Expansions Report", styles["Title"]),
         Spacer(1, 10),
         Paragraph(escape(f"Generated: {meta['created_at']}"), styles["Normal"]),
         Paragraph(escape(f"Services analyzed: {meta['services_text']}"), styles["Normal"]),
@@ -1242,8 +1242,8 @@ def portal_access_allowed(user):
 
 
 def page_auth():
-    st.title("NextStep")
-    st.subheader("Solar service sales intelligence")
+    st.title("NextStepSignal")
+    st.subheader("Market intelligence for operational expansion and opportunity discovery")
     st.write("Create an account to save services, generate prospect lists, and manage subscription access.")
     login_tab, signup_tab = st.tabs(["Sign In", "Create Account"])
 
@@ -1282,7 +1282,7 @@ def page_auth():
 
 def page_billing(user):
     st.title("Plans & Billing")
-    st.write("Choose a plan to make NextStep public-facing and subscription ready. Demo accounts also keep a small starter credit balance for testing.")
+    st.write("Choose a plan to make NextStepSignal public-facing and subscription ready. Demo accounts also keep a small starter credit balance for testing.")
     st.metric("Credits Remaining", credits(user["id"]))
     st.metric("Subscription Status", user.get("subscription_status", "inactive").title())
     st.metric("Current Plan", user.get("plan_name") or "None")
@@ -1323,8 +1323,8 @@ def page_billing(user):
 
 
 def page_dashboard():
-    st.title("NextStep")
-    st.subheader("Solar service sales intelligence portal")
+    st.title("NextStepSignal")
+    st.subheader("Market intelligence for operational expansion and opportunity discovery")
     svc = services_df()
     runs = runs_df()
     c1, c2, c3 = st.columns(3)
@@ -1643,7 +1643,7 @@ if not user:
     page_auth()
 else:
     with st.sidebar:
-        st.title("NextStep")
+        st.title("NextStepSignal")
         st.write(user["full_name"])
         st.write(user["email"])
         st.metric("Credits Remaining", credits(user["id"]))
