@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: nextstep
+    env: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0
+    disk:
+      name: nextstep-data
+      mountPath: /opt/render/project/src
+      sizeGB: 1

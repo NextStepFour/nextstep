@@ -1,0 +1,5 @@
+openai
+pandas
+reportlab
+stripe
+streamlit
