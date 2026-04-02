@@ -1611,10 +1611,10 @@ def page_auth():
 
 def page_billing(user):
     st.title("Plans & Billing")
-    st.write("Choose a monthly credit plan for buyer-company market intelligence.")
-    st.metric("Credits Remaining", credits(user["id"]))
-    st.metric("Subscription Status", user.get("subscription_status", "inactive").title())
-    st.metric("Current Plan", user.get("plan_name") or "None")
+    st.markdown(
+        '<div style="display:inline-block; background: rgba(96, 165, 250, 0.18); color: #dbeafe; padding: 0.45rem 0.65rem; border-radius: 0.45rem; font-weight: 600; margin-bottom: 1rem;">Choose a monthly credit plan for buyer-company market intelligence.</div>',
+        unsafe_allow_html=True,
+    )
 
     st.markdown(
         """
