@@ -1747,47 +1747,18 @@ def page_saved_lists():
         return
 
     master_company_df = build_master_saved_data()
-    if not master_company_df.empty:
-        st.markdown("**Master exports**")
-        st.dataframe(pretty_df(master_company_df), use_container_width=True)
-        st.download_button(
-            "Download master company list as CSV",
-            data=csv_data(master_company_df),
-            file_name="nextstepsignal_master_company_list.csv",
-            mime="text/csv",
-            key="master_company_csv",
-        )
+    if master_company_df.empty:
+        st.info("Saved lists exist, but the master company list is still empty.")
+        return
 
-    display_runs = runs[
-        [
-            "id",
-            "run_name",
-            "services_text",
-            "location_filter",
-            "time_window",
-            "mode",
-            "estimated_search_time",
-            "credits_used",
-            "created_at",
-        ]
-    ].copy()
-    st.dataframe(pretty_df(display_runs), use_container_width=True)
-    selected_id = st.selectbox(
-        "Open saved list",
-        options=runs["id"].tolist(),
-        format_func=lambda rid: next(
-            f"#{row['id']} | {row['run_name']} | {row['services_text']}"
-            for _, row in runs.iterrows()
-            if row["id"] == rid
-        ),
+    st.dataframe(pretty_df(master_company_df), use_container_width=True)
+    st.download_button(
+        "Download master company list as CSV",
+        data=csv_data(master_company_df),
+        file_name="nextstepsignal_master_company_list.csv",
+        mime="text/csv",
+        key="master_company_csv",
     )
-    action_col1, action_col2 = st.columns([1, 4])
-    with action_col1:
-        if st.button("Delete selected list", key=f"delete_list_{selected_id}"):
-            delete_run(selected_id)
-            st.success("Saved list deleted.")
-            st.rerun()
-    show_run(get_run(selected_id), f"saved_{selected_id}")
 
 
 def page_potential_expansions():
