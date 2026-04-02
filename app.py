@@ -225,6 +225,58 @@ def inject_global_styles():
 inject_global_styles()
 
 
+def auth_space_scene_html():
+    scene_rows = [
+        "............................",
+        "...*.......+......*.....+...",
+        "........*..............*....",
+        "......*......mm.............",
+        ".............mmm......*.....",
+        "............mmmmm...........",
+        "..+..........mmm.......+....",
+        "..............m.............",
+        ".................*..........",
+        "............rr..............",
+        "...........rrrr.............",
+        "...........rwwr......*......",
+        "..........rrwwrr............",
+        "...........rrrr.............",
+        "............rr..............",
+        "............ff..............",
+        "...........fssf.............",
+        "bbbbbbbbbbssssssbbbbbbbbbbbb",
+        "bbbbbbbbssssssssssbbbbbbbbbb",
+        "bbbbbbssssssssssssssbbbbbbbb",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    ]
+    color_map = {
+        ".": "#140b34",
+        "*": "#f8fafc",
+        "+": "#7dd3fc",
+        "m": "#f9a8d4",
+        "r": "#fb923c",
+        "w": "#dbeafe",
+        "f": "#fde047",
+        "s": "#e2e8f0",
+        "b": "#1d4ed8",
+    }
+
+    cells = []
+    for row in scene_rows:
+        for char in row:
+            color = color_map.get(char, color_map["."])
+            cells.append(f'<span class="space-pixel" style="background:{color};"></span>')
+
+    return (
+        '<div class="auth-art-shell">'
+        '<div class="auth-art-title">Launch your next signal</div>'
+        '<div class="auth-art-subtitle">Simple market intelligence for operational expansion.</div>'
+        f'<div class="space-pixel-scene">{"".join(cells)}</div>'
+        '</div>'
+    )
+
+
 PROMPT_TEMPLATE = """You are a market intelligence engine for solar service sales.
 
 Your task is to search the public web for U.S. solar job postings, recently filled roles, RFPs, and similar opportunities from the last {{TIME_WINDOW}} that overlap with the service description below.
@@ -1421,52 +1473,131 @@ def portal_access_allowed(user):
 
 
 def page_auth():
-    st.title(APP_NAME)
-    st.subheader(APP_TAGLINE)
-    st.write("Create an account to save services, generate prospect lists, and manage subscription access.")
-    login_tab, signup_tab = st.tabs(["Sign In", "Create Account"])
+    st.markdown(
+        """
+        <style>
+        .auth-panel {
+            border: 1px solid var(--brand-border);
+            border-radius: 1.25rem;
+            padding: 1.3rem 1.25rem 1.15rem 1.25rem;
+            background: rgba(96, 165, 250, 0.04);
+        }
+        .auth-brand {
+            font-size: 2.9rem;
+            line-height: 1;
+            font-weight: 800;
+            color: #eff6ff;
+            margin-bottom: 0.85rem;
+        }
+        .auth-copy {
+            color: #cbd5e1;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+        .auth-art-shell {
+            border: 1px solid var(--brand-border);
+            border-radius: 1.25rem;
+            padding: 1.1rem;
+            min-height: 100%;
+            background: linear-gradient(180deg, #140b34 0%, #1b1464 52%, #1d4ed8 100%);
+        }
+        .auth-art-title {
+            color: #dbeafe;
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.2rem;
+        }
+        .auth-art-subtitle {
+            color: #bfdbfe;
+            font-size: 0.95rem;
+            margin-bottom: 1rem;
+        }
+        .space-pixel-scene {
+            display: grid;
+            grid-template-columns: repeat(28, 12px);
+            gap: 0;
+            justify-content: center;
+            image-rendering: pixelated;
+            padding: 0.45rem;
+            background: rgba(15, 23, 42, 0.15);
+            border-radius: 1rem;
+        }
+        .space-pixel {
+            width: 12px;
+            height: 12px;
+            display: block;
+        }
+        @media (max-width: 1200px) {
+            .space-pixel-scene {
+                grid-template-columns: repeat(28, 10px);
+            }
+            .space-pixel {
+                width: 10px;
+                height: 10px;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    with login_tab:
-        with st.form("login_form"):
-            email = st.text_input("Email", key="login_email")
-            password = st.text_input("Password", type="password", key="login_password")
-            submitted = st.form_submit_button("Sign In")
-        if submitted:
-            user = get_user_by_email(email)
-            if not user or not verify_password(password, user["password_hash"]):
-                st.error("Invalid email or password.")
-            else:
-                if user.get("email", "").strip().lower() == ADMIN_EMAIL:
-                    update_user_fields(
-                        user["id"],
-                        is_admin=1,
-                        credit_balance=max(int(user.get("credit_balance") or 0), ADMIN_DEMO_CREDITS),
-                    )
-                    user = get_user_by_id(user["id"])
-                user = sync_user_billing(user)
-                set_current_user(user)
-                st.success("Signed in.")
-                st.rerun()
+    left, right = st.columns([1.02, 1.18], gap="large")
 
-    with signup_tab:
-        with st.form("signup_form"):
-            full_name = st.text_input("Full name", key="signup_name")
-            email = st.text_input("Email", key="signup_email")
-            password = st.text_input("Password", type="password", key="signup_password")
-            submitted = st.form_submit_button("Create Account")
-        if submitted:
-            if not full_name.strip() or not email.strip() or not password.strip():
-                st.error("Please complete all fields.")
-            elif get_user_by_email(email):
-                st.error("An account with that email already exists.")
-            else:
-                try:
-                    user = create_user(full_name, email, password)
+    with left:
+        st.markdown('<div class="auth-panel">', unsafe_allow_html=True)
+        st.markdown(f'<div class="auth-brand">{APP_NAME}</div>', unsafe_allow_html=True)
+        st.subheader(APP_TAGLINE)
+        st.markdown(
+            '<div class="auth-copy">Create an account to save services, generate prospect lists, and manage subscription access.</div>',
+            unsafe_allow_html=True,
+        )
+        login_tab, signup_tab = st.tabs(["Sign In", "Create Account"])
+
+        with login_tab:
+            with st.form("login_form"):
+                email = st.text_input("Email", key="login_email")
+                password = st.text_input("Password", type="password", key="login_password")
+                submitted = st.form_submit_button("Sign In")
+            if submitted:
+                user = get_user_by_email(email)
+                if not user or not verify_password(password, user["password_hash"]):
+                    st.error("Invalid email or password.")
+                else:
+                    if user.get("email", "").strip().lower() == ADMIN_EMAIL:
+                        update_user_fields(
+                            user["id"],
+                            is_admin=1,
+                            credit_balance=max(int(user.get("credit_balance") or 0), ADMIN_DEMO_CREDITS),
+                        )
+                        user = get_user_by_id(user["id"])
+                    user = sync_user_billing(user)
                     set_current_user(user)
-                    st.success("Account created. You can use starter demo credits or subscribe below.")
+                    st.success("Signed in.")
                     st.rerun()
-                except ValueError as exc:
-                    st.error(str(exc))
+
+        with signup_tab:
+            with st.form("signup_form"):
+                full_name = st.text_input("Full name", key="signup_name")
+                email = st.text_input("Email", key="signup_email")
+                password = st.text_input("Password", type="password", key="signup_password")
+                submitted = st.form_submit_button("Create Account")
+            if submitted:
+                if not full_name.strip() or not email.strip() or not password.strip():
+                    st.error("Please complete all fields.")
+                elif get_user_by_email(email):
+                    st.error("An account with that email already exists.")
+                else:
+                    try:
+                        user = create_user(full_name, email, password)
+                        set_current_user(user)
+                        st.success("Account created. You can use starter demo credits or subscribe below.")
+                        st.rerun()
+                    except ValueError as exc:
+                        st.error(str(exc))
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with right:
+        st.markdown(auth_space_scene_html(), unsafe_allow_html=True)
 
 
 def page_billing(user):
