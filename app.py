@@ -98,6 +98,7 @@ EXPANSION_COLUMNS = [
     "go_to_market_note",
 ]
 DISPLAY_NAME_MAP = {
+    "date_generated": "Date Generated",
     "buyer_company": "Buyer Company",
     "job_posting_title": "Job Posting Title",
     "matched_services": "Matched Services",
@@ -1278,6 +1279,13 @@ def csv_data(df):
     return buffer.getvalue()
 
 
+def format_short_date(value):
+    try:
+        return pd.to_datetime(value, errors="coerce").strftime("%m/%d/%y")
+    except Exception:
+        return ""
+
+
 def pdf_data(company_df, meta):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
@@ -1399,6 +1407,7 @@ def build_master_saved_data():
             company_df = aggregate_companies(evidence_df)
         if company_df.empty:
             continue
+        company_df["date_generated"] = format_short_date(run_record["created_at"])
         company_df["source_run_id"] = run_record["id"]
         company_df["source_run_name"] = run_record["run_name"]
         company_df["source_run_created_at"] = run_record["created_at"]
@@ -1409,7 +1418,18 @@ def build_master_saved_data():
         return pd.DataFrame()
 
     master_company_df = pd.concat(company_frames, ignore_index=True)
-    return merge_company_lists(master_company_df)
+    master_company_df["_date_generated_sort"] = pd.to_datetime(
+        master_company_df["source_run_created_at"],
+        errors="coerce",
+    )
+    visible_columns = ["date_generated"] + COMPANY_COLUMNS
+    for column in visible_columns:
+        if column not in master_company_df.columns:
+            master_company_df[column] = None
+    return master_company_df.sort_values(
+        ["_date_generated_sort", "opportunity_score", "buyer_company"],
+        ascending=[False, False, True],
+    ).reset_index(drop=True)[visible_columns]
 
 
 def portal_access_allowed(user):
