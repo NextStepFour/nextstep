@@ -715,6 +715,19 @@ def runs_df(user_id=None):
     return df
 
 
+def users_df():
+    with conn() as db:
+        rows = db.execute(
+            """
+            SELECT id, full_name, email, is_admin, subscription_status, plan_name,
+                   credit_balance, monthly_credit_allowance, created_at
+            FROM users
+            ORDER BY created_at DESC, id DESC
+            """
+        ).fetchall()
+    return pd.DataFrame([dict(r) for r in rows])
+
+
 def get_run(run_id, user_id=None):
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user:
@@ -2008,6 +2021,35 @@ def page_saved_lists():
     )
 
 
+def page_users():
+    st.title("Users")
+    user_table = users_df()
+    if user_table.empty:
+        st.info("No users found yet.")
+        return
+
+    display = user_table.copy()
+    display["is_admin"] = display["is_admin"].map({1: "Yes", 0: "No"})
+    display["subscription_status"] = display["subscription_status"].fillna("inactive").str.title()
+    display["plan_name"] = display["plan_name"].fillna("None")
+    display["monthly_credit_allowance"] = display["monthly_credit_allowance"].fillna(0).astype(int)
+    display["credit_balance"] = display["credit_balance"].fillna(0).astype(int)
+    display["created_at"] = display["created_at"].fillna("")
+    display = display[
+        [
+            "full_name",
+            "email",
+            "credit_balance",
+            "subscription_status",
+            "plan_name",
+            "monthly_credit_allowance",
+            "is_admin",
+            "created_at",
+        ]
+    ]
+    st.dataframe(pretty_df(display), use_container_width=True)
+
+
 def page_potential_expansions():
     st.title("Potential Expansions")
     st.write(
@@ -2134,9 +2176,12 @@ else:
         st.metric("Credits Remaining", credits(user["id"]))
         st.write(f"Plan: {user.get('plan_name') or 'None'}")
         st.write(f"Status: {user.get('subscription_status', 'inactive').title()}")
+        nav_options = ["Dashboard", "Plans & Billing", "Service Profiles", "Generate List", "Saved Lists", "Potential Expansions"]
+        if is_admin_user(user):
+            nav_options.append("Users")
         page = st.radio(
             "Navigate",
-            ["Dashboard", "Plans & Billing", "Service Profiles", "Generate List", "Saved Lists", "Potential Expansions"],
+            nav_options,
         )
         if st.button("Sign Out"):
             set_current_user(None)
@@ -2155,5 +2200,7 @@ else:
         page_generate()
     elif page == "Potential Expansions":
         page_potential_expansions()
+    elif page == "Users" and is_admin_user(user):
+        page_users()
     else:
         page_saved_lists()
