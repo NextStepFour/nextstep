@@ -1319,23 +1319,25 @@ def page_billing(user):
     st.markdown(
         """
         <style>
-        .starter-checkout-link {
+        .plan-checkout-link {
             display: block;
             width: 100%;
             text-align: center;
-            padding: 0.7rem 1rem;
-            border-radius: 0.8rem;
-            background: #7dd3fc;
+            padding: 0.62rem 0.95rem;
+            border-radius: 0.7rem;
+            background: #60a5fa;
             color: #0f172a !important;
-            font-weight: 700;
+            font-weight: 650;
             text-decoration: none !important;
-            border: 1px solid #7dd3fc;
+            border: 1px solid #60a5fa;
             margin-top: 0.25rem;
             margin-bottom: 0.25rem;
+            font-size: 0.98rem;
+            line-height: 1.2;
         }
-        .starter-checkout-link:hover {
-            background: #67c4f4;
-            border-color: #67c4f4;
+        .plan-checkout-link:hover {
+            background: #4f95ec;
+            border-color: #4f95ec;
         }
         </style>
         """,
@@ -1351,18 +1353,10 @@ def page_billing(user):
             if stripe_ready() and plan["price_id"]:
                 try:
                     url = get_cached_checkout_url(user, plan_key)
-                    if plan_key == "starter":
-                        st.markdown(
-                            f'<a class="starter-checkout-link" href="{url}" target="_self">Subscribe to {plan["name"]}</a>',
-                            unsafe_allow_html=True,
-                        )
-                    else:
-                        st.link_button(
-                            f"Subscribe to {plan['name']}",
-                            url,
-                            type="secondary",
-                            use_container_width=True,
-                        )
+                    st.markdown(
+                        f'<a class="plan-checkout-link" href="{url}" target="_self">Subscribe to {plan["name"]}</a>',
+                        unsafe_allow_html=True,
+                    )
                 except Exception as exc:
                     st.error(f"Stripe checkout could not be created: {exc}")
             else:
