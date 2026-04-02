@@ -22,6 +22,9 @@ APP_NAME = "NextStepSignal"
 APP_TAGLINE = "Market intelligence for operational expansion and opportunity discovery"
 DB_PATH = os.getenv("NEXTSTEP_DB_PATH", "nextstep_portal.db")
 DEFAULT_CREDITS = 50
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "rgordon@heliovolta.com").strip().lower()
+ADMIN_DEMO_CREDITS = int(os.getenv("ADMIN_DEMO_CREDITS", "100"))
+ADMIN_SIGNUP_CODE = os.getenv("ADMIN_SIGNUP_CODE", "")
 TIME_OPTIONS = ["2 weeks", "1 month", "2 months", "3 months"]
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8501")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
@@ -358,6 +361,7 @@ def init_db():
                 full_name TEXT NOT NULL,
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
+                is_admin INTEGER NOT NULL DEFAULT 0,
                 stripe_customer_id TEXT,
                 subscription_status TEXT NOT NULL DEFAULT 'inactive',
                 plan_name TEXT,
@@ -405,6 +409,9 @@ def init_db():
             "INSERT OR IGNORE INTO settings (key, value) VALUES ('credits_balance', ?)",
             (str(DEFAULT_CREDITS),),
         )
+        user_columns = [row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()]
+        if "is_admin" not in user_columns:
+            db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
         service_columns = [row["name"] for row in db.execute("PRAGMA table_info(services)").fetchall()]
         if "user_id" not in service_columns:
             db.execute("ALTER TABLE services ADD COLUMN user_id INTEGER")
@@ -453,20 +460,37 @@ def get_user_by_id(user_id):
     return dict(row) if row else None
 
 
-def create_user(full_name, email, password):
+def is_admin_user(user):
+    if not user:
+        return False
+    return bool(int(user.get("is_admin") or 0))
+
+
+def create_user(full_name, email, password, admin_signup_code=""):
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+    normalized_email = email.strip().lower()
+    normalized_admin_code = admin_signup_code.strip()
+    wants_admin_email = normalized_email == ADMIN_EMAIL
+    if wants_admin_email and not ADMIN_SIGNUP_CODE:
+        raise ValueError("The admin account is locked until ADMIN_SIGNUP_CODE is configured.")
+    if wants_admin_email and normalized_admin_code != ADMIN_SIGNUP_CODE:
+        raise ValueError("That email is reserved.")
+    is_admin = 1 if wants_admin_email and normalized_admin_code == ADMIN_SIGNUP_CODE else 0
+    starting_credits = ADMIN_DEMO_CREDITS if is_admin else 0
     with conn() as db:
         cursor = db.execute(
             """
             INSERT INTO users (
-                full_name, email, password_hash, subscription_status,
+                full_name, email, password_hash, is_admin, subscription_status,
                 plan_name, monthly_credit_allowance, credit_balance, created_at
-            ) VALUES (?, ?, ?, 'inactive', null, 0, 5, ?)
+            ) VALUES (?, ?, ?, ?, 'inactive', null, 0, ?, ?)
             """,
             (
                 full_name.strip(),
-                email.strip().lower(),
+                normalized_email,
                 hash_password(password),
+                is_admin,
+                starting_credits,
                 created_at,
             ),
         )
@@ -1238,12 +1262,31 @@ def page_auth():
         with st.form("login_form"):
             email = st.text_input("Email", key="login_email")
             password = st.text_input("Password", type="password", key="login_password")
+            admin_login_code = st.text_input(
+                "Admin access code (admin only)",
+                type="password",
+                key="login_admin_code",
+            )
             submitted = st.form_submit_button("Sign In")
         if submitted:
             user = get_user_by_email(email)
             if not user or not verify_password(password, user["password_hash"]):
                 st.error("Invalid email or password.")
             else:
+                if user.get("email", "").strip().lower() == ADMIN_EMAIL:
+                    if int(user.get("is_admin") or 0) != 1:
+                        if not ADMIN_SIGNUP_CODE:
+                            st.error("Admin access is locked until ADMIN_SIGNUP_CODE is configured.")
+                            return
+                        if admin_login_code.strip() != ADMIN_SIGNUP_CODE:
+                            st.error("Admin access code required for this account.")
+                            return
+                        update_user_fields(
+                            user["id"],
+                            is_admin=1,
+                            credit_balance=max(int(user.get("credit_balance") or 0), ADMIN_DEMO_CREDITS),
+                        )
+                        user = get_user_by_id(user["id"])
                 user = sync_user_billing(user)
                 set_current_user(user)
                 st.success("Signed in.")
@@ -1254,6 +1297,11 @@ def page_auth():
             full_name = st.text_input("Full name", key="signup_name")
             email = st.text_input("Email", key="signup_email")
             password = st.text_input("Password", type="password", key="signup_password")
+            admin_signup_code = st.text_input(
+                "Admin access code (admin only)",
+                type="password",
+                key="signup_admin_code",
+            )
             submitted = st.form_submit_button("Create Account")
         if submitted:
             if not full_name.strip() or not email.strip() or not password.strip():
@@ -1261,10 +1309,13 @@ def page_auth():
             elif get_user_by_email(email):
                 st.error("An account with that email already exists.")
             else:
-                user = create_user(full_name, email, password)
-                set_current_user(user)
-                st.success("Account created. You can use starter demo credits or subscribe below.")
-                st.rerun()
+                try:
+                    user = create_user(full_name, email, password, admin_signup_code)
+                    set_current_user(user)
+                    st.success("Account created. You can use starter demo credits or subscribe below.")
+                    st.rerun()
+                except ValueError as exc:
+                    st.error(str(exc))
 
 
 def page_billing(user):
@@ -1319,11 +1370,12 @@ def page_dashboard():
     c2.metric("Saved Services", len(svc))
     c3.metric("Saved Lists", len(runs))
     st.write("Save service profiles, generate prospect lists with credits, and keep those lists for later review and export.")
-    with st.expander("Credit controls"):
-        amount = st.number_input("Add demo credits", min_value=1, max_value=500, value=10, step=1)
-        if st.button("Add credits"):
-            st.success(f"Credits updated to {add_credits(int(amount))}.")
-            st.rerun()
+    if is_admin_user(current_user()):
+        with st.expander("Admin credit controls"):
+            amount = st.number_input("Add demo credits", min_value=1, max_value=500, value=10, step=1)
+            if st.button("Add credits"):
+                st.success(f"Credits updated to {add_credits(int(amount))}.")
+                st.rerun()
     if runs.empty:
         st.info("No saved lists yet.")
     else:
