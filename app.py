@@ -269,11 +269,9 @@ def auth_space_scene_html():
             cells.append(f'<span class="space-pixel" style="background:{color};"></span>')
 
     return (
-        '<div class="auth-art-shell">'
-        '<div class="auth-art-title">Launch your next signal</div>'
-        '<div class="auth-art-subtitle">Simple market intelligence for operational expansion.</div>'
+        '<div class="auth-hero">'
         f'<div class="space-pixel-scene">{"".join(cells)}</div>'
-        '</div>'
+        "</div>"
     )
 
 
@@ -1476,51 +1474,52 @@ def page_auth():
     st.markdown(
         """
         <style>
-        .auth-panel {
-            border: 1px solid var(--brand-border);
-            border-radius: 1.25rem;
-            padding: 1.3rem 1.25rem 1.15rem 1.25rem;
-            background: rgba(96, 165, 250, 0.04);
-        }
         .auth-brand {
             font-size: 2.9rem;
             line-height: 1;
             font-weight: 800;
             color: #eff6ff;
-            margin-bottom: 0.85rem;
+            margin-bottom: 0.65rem;
         }
         .auth-copy {
             color: #cbd5e1;
             margin-bottom: 1rem;
             font-size: 1rem;
         }
-        .auth-art-shell {
-            border: 1px solid var(--brand-border);
-            border-radius: 1.25rem;
-            padding: 1.1rem;
+        .auth-left {
+            padding-right: 1.2rem;
+        }
+        .auth-right {
             min-height: 100%;
-            background: linear-gradient(180deg, #140b34 0%, #1b1464 52%, #1d4ed8 100%);
         }
-        .auth-art-title {
-            color: #dbeafe;
-            font-size: 1.1rem;
-            font-weight: 700;
-            margin-bottom: 0.2rem;
+        .auth-hero {
+            position: relative;
+            min-height: 760px;
+            width: 100%;
+            overflow: hidden;
+            border-radius: 1.35rem;
+            background:
+                linear-gradient(180deg, #120834 0%, #1d145d 48%, #1d4ed8 100%);
         }
-        .auth-art-subtitle {
-            color: #bfdbfe;
-            font-size: 0.95rem;
-            margin-bottom: 1rem;
+        .auth-hero::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(90deg, rgba(15, 23, 42, 0.96) 0%, rgba(15, 23, 42, 0.70) 18%, rgba(15, 23, 42, 0.18) 42%, rgba(15, 23, 42, 0.00) 62%);
+            z-index: 2;
+            pointer-events: none;
         }
         .space-pixel-scene {
+            position: absolute;
+            inset: 0;
             display: grid;
             grid-template-columns: repeat(28, 12px);
             gap: 0;
-            justify-content: center;
+            place-content: center;
             image-rendering: pixelated;
-            padding: 0.45rem;
-            background: rgba(15, 23, 42, 0.15);
-            border-radius: 1rem;
+            transform: scale(1.9);
+            transform-origin: center center;
         }
         .space-pixel {
             width: 12px;
@@ -1528,8 +1527,16 @@ def page_auth():
             display: block;
         }
         @media (max-width: 1200px) {
+            .auth-left {
+                padding-right: 0;
+            }
+            .auth-hero {
+                min-height: 520px;
+                margin-top: 1rem;
+            }
             .space-pixel-scene {
                 grid-template-columns: repeat(28, 10px);
+                transform: scale(1.45);
             }
             .space-pixel {
                 width: 10px;
@@ -1544,7 +1551,7 @@ def page_auth():
     left, right = st.columns([1.02, 1.18], gap="large")
 
     with left:
-        st.markdown('<div class="auth-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="auth-left">', unsafe_allow_html=True)
         st.markdown(f'<div class="auth-brand">{APP_NAME}</div>', unsafe_allow_html=True)
         st.subheader(APP_TAGLINE)
         st.markdown(
@@ -1597,7 +1604,9 @@ def page_auth():
         st.markdown("</div>", unsafe_allow_html=True)
 
     with right:
+        st.markdown('<div class="auth-right">', unsafe_allow_html=True)
         st.markdown(auth_space_scene_html(), unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def page_billing(user):
