@@ -232,7 +232,7 @@ PROMPT_TEMPLATE = """You are a market intelligence engine for solar service sale
 
 Your task is to search the public web for U.S. solar job postings, recently filled roles, RFPs, and similar opportunities from the last {{TIME_WINDOW}} that overlap with the service description below.
 
-Search broadly across public websites, job boards, company careers pages, and RFP/procurement pages.
+Search broadly across public websites, structured company careers pages, ATS-hosted job pages, major public job boards, and RFP/procurement pages.
 
 Target geography inside the United States:
 {{LOCATION_FILTER}}
@@ -277,6 +277,7 @@ Rules:
 - Include only public web results you actually found
 - Include only U.S. results
 - Include only results that appear to be from the last {{TIME_WINDOW}}
+- Prefer official company career pages and structured ATS/job board pages over reposts or weak aggregators
 - Prioritize results in the target geography when possible
 - opportunity_status must be one of: Open, Filled, Unknown
 - match_score must be 0 to 100
@@ -968,9 +969,9 @@ def build_prompt(description, location_filter, time_window, high_volume_mode):
     prompt = prompt.replace(
         "{{SOURCE_GUIDANCE}}",
         (
-            "Search across company career pages, ATS sites such as Greenhouse, Lever, Workday, iCIMS, SmartRecruiters, Ashby, and public procurement or RFP pages. Also search adjacent job-title variants and subcontracting-related responsibilities."
+            "Search across official company career pages, structured ATS pages such as Greenhouse, Lever, Workday, iCIMS, SmartRecruiters, and Ashby, plus public job board pages on LinkedIn, Indeed, Glassdoor, Built In, and similar sites when the postings are publicly visible. Also check public procurement or RFP pages."
             if high_volume_mode
-            else "Prioritize company career pages, public ATS sites, and relevant procurement or RFP pages."
+            else "Prioritize official company career pages, public ATS pages, and publicly visible structured job board pages before weaker reposts or aggregators."
         ),
     )
     prompt = prompt.replace(
@@ -991,10 +992,17 @@ def build_prompt(description, location_filter, time_window, high_volume_mode):
 def search_variants(service_row, high_volume_mode):
     base_description = safe_text(service_row["service_description"])
     service_name = safe_text(service_row["service_name"])
-    variants = [base_description]
+    variants = [
+        base_description,
+        (
+            f"{service_name}\n\nFocus on official employer career pages, structured ATS-hosted job pages, and other public structured posting sources tied to this service."
+            if service_name
+            else f"{base_description}\n\nFocus on official employer career pages, structured ATS-hosted job pages, and other public structured posting sources."
+        ),
+    ]
     if high_volume_mode:
         variants.append(
-            f"{service_name}\n\nFocus on role-title variants, adjacent responsibilities, company careers pages, ATS pages, and strong hiring signals tied to this service."
+            f"{service_name}\n\nExpand recall using public structured job board pages such as LinkedIn, Indeed, Glassdoor, Built In, and official ATS/careers pages. Derive role-title variants and adjacent responsibilities only from this service description."
         )
     return variants
 
