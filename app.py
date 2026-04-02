@@ -34,11 +34,27 @@ PLANS = {
         "name": "Starter",
         "price_id": os.getenv("STRIPE_PRICE_ID_STARTER", ""),
         "monthly_credits": 50,
+        "monthly_price": "$7",
+        "credit_note": "50 credits per month",
+        "features": [
+            "Buyer company list generation",
+            "Save service profiles",
+            "Saved lists",
+            "CSV and PDF downloads",
+        ],
     },
     "pro": {
         "name": "Pro",
         "price_id": os.getenv("STRIPE_PRICE_ID_PRO", ""),
         "monthly_credits": 200,
+        "monthly_price": "$15",
+        "credit_note": "200 credits per month",
+        "features": [
+            "Higher monthly search volume",
+            "Potential expansions analysis",
+            "Saved lists",
+            "CSV and PDF downloads",
+        ],
     },
 }
 EVIDENCE_COLUMNS = [
@@ -1052,6 +1068,14 @@ def safe_text(value, default=""):
     return text if text else default
 
 
+def ensure_company_columns(company_df):
+    working = company_df.copy()
+    for column in COMPANY_COLUMNS:
+        if column not in working.columns:
+            working[column] = None
+    return working[COMPANY_COLUMNS]
+
+
 def aggregate_companies(evidence_df):
     if evidence_df.empty:
         return pd.DataFrame(columns=COMPANY_COLUMNS)
@@ -1088,6 +1112,40 @@ def aggregate_companies(evidence_df):
         )
     df = pd.DataFrame(rows)
     return df[COMPANY_COLUMNS].sort_values(["opportunity_score", "buyer_company"], ascending=[False, True]).reset_index(drop=True)
+
+
+def merge_company_lists(company_df):
+    if company_df.empty:
+        return pd.DataFrame(columns=COMPANY_COLUMNS)
+
+    temp = ensure_company_columns(company_df)
+    rows = []
+    for buyer_company, group in temp.groupby("buyer_company", dropna=False):
+        best = group.sort_values("opportunity_score", ascending=False).iloc[0]
+        matched_services = flatten_unique(group["matched_services"].tolist())
+        best_postings = flatten_unique(group["best_matching_postings"].tolist())[:5]
+        source_urls = flatten_unique(group["source_urls"].tolist())[:5]
+        likely_buyer_department = (
+            pd.Series([x for x in group["likely_buyer_department_general"] if pd.notna(x) and str(x).strip()]).mode().iloc[0]
+            if any(pd.notna(group["likely_buyer_department_general"]))
+            else None
+        )
+        rows.append(
+            {
+                "buyer_company": safe_text(buyer_company, "Unknown Company"),
+                "job_posting_title": safe_text(best["job_posting_title"]),
+                "matched_services": "; ".join(matched_services),
+                "opportunity_score": int(best["opportunity_score"]) if pd.notna(best["opportunity_score"]) else 0,
+                "likely_buyer_department_general": likely_buyer_department,
+                "best_matching_postings": " | ".join(best_postings),
+                "source_urls": " | ".join(source_urls),
+            }
+        )
+
+    return pd.DataFrame(rows)[COMPANY_COLUMNS].sort_values(
+        ["opportunity_score", "buyer_company"],
+        ascending=[False, True],
+    ).reset_index(drop=True)
 
 
 def format_lists_for_display(df):
@@ -1189,12 +1247,13 @@ def expansion_pdf_data(expansion_df, meta):
 
 
 def show_run(run_record, key_prefix):
-    evidence_df = ensure_evidence_columns(load_df(run_record["evidence_json"]))
-    if evidence_df.empty:
-        st.info("This list has no saved evidence.")
-        return
-
-    company_df = aggregate_companies(evidence_df)
+    company_df = ensure_company_columns(load_df(run_record["company_json"]))
+    if company_df.empty:
+        evidence_df = ensure_evidence_columns(load_df(run_record["evidence_json"]))
+        if evidence_df.empty:
+            st.info("This list has no saved evidence.")
+            return
+        company_df = aggregate_companies(evidence_df)
 
     st.subheader("Buyer Company List")
     st.dataframe(pretty_df(company_df), use_container_width=True)
@@ -1229,29 +1288,30 @@ def build_master_saved_data():
     if runs.empty:
         return pd.DataFrame()
 
-    evidence_frames = []
+    company_frames = []
     for _, run_row in runs.iterrows():
         run_record = get_run(run_row["id"])
         if not run_record:
             continue
-        evidence_df = ensure_evidence_columns(load_df(run_record["evidence_json"]))
-        if evidence_df.empty:
+        company_df = ensure_company_columns(load_df(run_record["company_json"]))
+        if company_df.empty:
+            evidence_df = ensure_evidence_columns(load_df(run_record["evidence_json"]))
+            if evidence_df.empty:
+                continue
+            company_df = aggregate_companies(evidence_df)
+        if company_df.empty:
             continue
-        evidence_df["source_run_id"] = run_record["id"]
-        evidence_df["source_run_name"] = run_record["run_name"]
-        evidence_df["source_run_created_at"] = run_record["created_at"]
-        evidence_df["source_services"] = run_record["services_text"]
-        evidence_frames.append(evidence_df)
+        company_df["source_run_id"] = run_record["id"]
+        company_df["source_run_name"] = run_record["run_name"]
+        company_df["source_run_created_at"] = run_record["created_at"]
+        company_df["source_services"] = run_record["services_text"]
+        company_frames.append(company_df)
 
-    if not evidence_frames:
+    if not company_frames:
         return pd.DataFrame()
 
-    master_evidence_df = pd.concat(evidence_frames, ignore_index=True)
-    master_evidence_df = master_evidence_df.sort_values(
-        by="match_score", ascending=False
-    ).reset_index(drop=True)
-
-    return aggregate_companies(master_evidence_df)
+    master_company_df = pd.concat(company_frames, ignore_index=True)
+    return merge_company_lists(master_company_df)
 
 
 def portal_access_allowed(user):
@@ -1311,7 +1371,7 @@ def page_auth():
 
 def page_billing(user):
     st.title("Plans & Billing")
-    st.write(f"Choose a plan to make {APP_NAME} public-facing and subscription ready. Demo accounts also keep a small starter credit balance for testing.")
+    st.write("Choose a monthly credit plan for buyer-company market intelligence.")
     st.metric("Credits Remaining", credits(user["id"]))
     st.metric("Subscription Status", user.get("subscription_status", "inactive").title())
     st.metric("Current Plan", user.get("plan_name") or "None")
@@ -1319,25 +1379,63 @@ def page_billing(user):
     st.markdown(
         """
         <style>
+        .pricing-card {
+            border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 1rem;
+            padding: 1.2rem 1.15rem 1rem 1.15rem;
+            background: rgba(255,255,255,0.02);
+            min-height: 100%;
+        }
+        .pricing-plan-name {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 0.4rem;
+        }
+        .pricing-price {
+            font-size: 3rem;
+            line-height: 1;
+            font-weight: 800;
+            color: #93c5fd;
+            margin-bottom: 0.1rem;
+        }
+        .pricing-period {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-bottom: 0.9rem;
+        }
+        .pricing-credits {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.55rem;
+        }
+        .pricing-note {
+            font-size: 0.95rem;
+            color: #cbd5e1;
+            margin-bottom: 0.85rem;
+        }
         .plan-checkout-link {
             display: block;
             width: 100%;
             text-align: center;
-            padding: 0.62rem 0.95rem;
+            padding: 0.7rem 0.95rem;
             border-radius: 0.7rem;
             background: #60a5fa;
             color: #0f172a !important;
             font-weight: 650;
             text-decoration: none !important;
             border: 1px solid #60a5fa;
-            margin-top: 0.25rem;
-            margin-bottom: 0.25rem;
+            margin-top: 0.2rem;
+            margin-bottom: 0.95rem;
             font-size: 0.98rem;
             line-height: 1.2;
         }
         .plan-checkout-link:hover {
             background: #4f95ec;
             border-color: #4f95ec;
+        }
+        .pricing-feature {
+            margin-bottom: 0.35rem;
+            font-size: 0.97rem;
         }
         </style>
         """,
@@ -1348,8 +1446,17 @@ def page_billing(user):
     for col, plan_key in zip([col1, col2], ["starter", "pro"]):
         plan = PLANS[plan_key]
         with col:
-            st.markdown(f"**{plan['name']}**")
-            st.write(f"{plan['monthly_credits']} credits per month")
+            st.markdown(
+                (
+                    '<div class="pricing-card">'
+                    f'<div class="pricing-plan-name">{escape(plan["name"])}</div>'
+                    f'<div class="pricing-price">{escape(plan["monthly_price"])}</div>'
+                    '<div class="pricing-period">Per month</div>'
+                    f'<div class="pricing-credits">{escape(plan["credit_note"])}</div>'
+                    '<div class="pricing-note">1 returned buyer company = 1 credit</div>'
+                ),
+                unsafe_allow_html=True,
+            )
             if stripe_ready() and plan["price_id"]:
                 try:
                     url = get_cached_checkout_url(user, plan_key)
@@ -1361,6 +1468,9 @@ def page_billing(user):
                     st.error(f"Stripe checkout could not be created: {exc}")
             else:
                 st.info(f"Set the Stripe price ID for {plan['name']} to enable checkout.")
+            for feature in plan["features"]:
+                st.markdown(f'<div class="pricing-feature">• {escape(feature)}</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
     if stripe_ready():
         left, right = st.columns(2)
@@ -1453,7 +1563,15 @@ def page_generate():
     location_filter = st.text_input("Location filter", value="Any U.S. location")
     time_window = st.selectbox("Time window", TIME_OPTIONS, index=2)
     high_volume = st.checkbox("High volume mode (broader search, more opportunities, lower precision)", value=True)
-    credits_needed = len(selected) * (2 if high_volume else 1)
+    available_credits = credits()
+    result_limit_cap = min(20, max(3, available_credits)) if available_credits else 3
+    result_limit = st.slider(
+        "Buyer company result limit",
+        min_value=3,
+        max_value=result_limit_cap,
+        value=min(10, result_limit_cap),
+        help="You are charged based on the final buyer companies returned, up to this limit.",
+    )
     estimated_range, estimate_basis = estimate_search_time(
         len(selected),
         high_volume,
@@ -1461,7 +1579,7 @@ def page_generate():
     )
     basis_text = "based on your recent runs" if estimate_basis == "history" else "based on current settings"
     st.caption(
-        f"Credits needed: {credits_needed} | Credits remaining: {credits()} | Estimated search time: {format_duration_range_text(estimated_range[0], estimated_range[1])} ({basis_text})"
+        f"Credits remaining: {available_credits} | This search will cost between 3 and {result_limit} credits depending on buyer companies returned | Estimated search time: {format_duration_range_text(estimated_range[0], estimated_range[1])} ({basis_text})"
     )
     st.caption("Search time can still vary because live web search depends on outside websites and OpenAI response time.")
 
@@ -1469,8 +1587,12 @@ def page_generate():
         if not selected:
             st.error("Please select at least one saved service.")
             return
-        if credits() < credits_needed:
-            st.error("Not enough credits. Add more on the Dashboard.")
+        current_credits = credits()
+        if current_credits < 3:
+            st.error("At least 3 credits are required to run a search.")
+            return
+        if current_credits < result_limit:
+            st.error(f"You need at least {result_limit} credits available to run with a result limit of {result_limit}.")
             return
         try:
             api_client = client()
@@ -1501,7 +1623,9 @@ def page_generate():
             evidence_df = ensure_evidence_columns(evidence_df)
             progress.progress(90, text="Ranking and organizing results...")
             evidence_df = evidence_df.sort_values("match_score", ascending=False).reset_index(drop=True)
-            company_df = aggregate_companies(evidence_df)
+            company_df_all = aggregate_companies(evidence_df)
+            company_df = company_df_all.head(result_limit).reset_index(drop=True)
+            actual_credits_used = max(3, len(company_df))
             duration_seconds = time.time() - start_time
             run_id = save_run(
                 run_name=f"{datetime.now().strftime('%Y-%m-%d %H:%M')} | {len(selected)} service(s)",
@@ -1511,15 +1635,15 @@ def page_generate():
                 time_window=time_window,
                 high_volume_mode=high_volume,
                 enrichment_enabled=False,
-                credits_used=credits_needed,
+                credits_used=actual_credits_used,
                 duration_seconds=duration_seconds,
                 company_df=company_df,
                 evidence_df=evidence_df,
             )
-            remaining = add_credits(-credits_needed)
+            remaining = add_credits(-actual_credits_used)
             progress.progress(100, text="List complete.")
             st.success(
-                f"Saved list #{run_id} created in {format_duration_text(duration_seconds)}. Credits remaining: {remaining}"
+                f"Saved list #{run_id} created in {format_duration_text(duration_seconds)}. {len(company_df)} buyer companies returned. Credits used: {actual_credits_used}. Credits remaining: {remaining}"
             )
             show_run(get_run(run_id), f"new_{run_id}")
             with st.expander("Raw search responses"):

@@ -27,8 +27,9 @@ Simple Streamlit portal for generating and saving market intelligence prospect l
 
 ## Credits
 
-- Focused mode uses 1 credit per selected service
-- High volume mode uses 2 credits per selected service
+- Generate List charges 1 credit per returned buyer company
+- Each completed Generate List search has a minimum charge of 3 credits
+- The maximum charge for a Generate List run is the buyer company result limit selected by the user
 - Potential Expansions uses the search credits above plus 1 extra synthesis credit
 - New users start with a small demo credit balance
 - Active paid plans refresh monthly credits based on the Stripe plan
