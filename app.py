@@ -24,7 +24,6 @@ DB_PATH = os.getenv("NEXTSTEP_DB_PATH", "nextstep_portal.db")
 DEFAULT_CREDITS = 50
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "rgordon@heliovolta.com").strip().lower()
 ADMIN_DEMO_CREDITS = int(os.getenv("ADMIN_DEMO_CREDITS", "100"))
-ADMIN_SIGNUP_CODE = os.getenv("ADMIN_SIGNUP_CODE", "")
 TIME_OPTIONS = ["2 weeks", "1 month", "2 months", "3 months"]
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8501")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
@@ -412,6 +411,10 @@ def init_db():
         user_columns = [row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()]
         if "is_admin" not in user_columns:
             db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+        db.execute(
+            "UPDATE users SET is_admin = 1 WHERE lower(email) = ?",
+            (ADMIN_EMAIL,),
+        )
         service_columns = [row["name"] for row in db.execute("PRAGMA table_info(services)").fetchall()]
         if "user_id" not in service_columns:
             db.execute("ALTER TABLE services ADD COLUMN user_id INTEGER")
@@ -466,16 +469,11 @@ def is_admin_user(user):
     return bool(int(user.get("is_admin") or 0))
 
 
-def create_user(full_name, email, password, admin_signup_code=""):
+def create_user(full_name, email, password):
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M")
     normalized_email = email.strip().lower()
-    normalized_admin_code = admin_signup_code.strip()
     wants_admin_email = normalized_email == ADMIN_EMAIL
-    if wants_admin_email and not ADMIN_SIGNUP_CODE:
-        raise ValueError("The admin account is locked until ADMIN_SIGNUP_CODE is configured.")
-    if wants_admin_email and normalized_admin_code != ADMIN_SIGNUP_CODE:
-        raise ValueError("That email is reserved.")
-    is_admin = 1 if wants_admin_email and normalized_admin_code == ADMIN_SIGNUP_CODE else 0
+    is_admin = 1 if wants_admin_email else 0
     starting_credits = ADMIN_DEMO_CREDITS if is_admin else 0
     with conn() as db:
         cursor = db.execute(
@@ -1272,11 +1270,6 @@ def page_auth():
         with st.form("login_form"):
             email = st.text_input("Email", key="login_email")
             password = st.text_input("Password", type="password", key="login_password")
-            admin_login_code = st.text_input(
-                "Admin access code (admin only)",
-                type="password",
-                key="login_admin_code",
-            )
             submitted = st.form_submit_button("Sign In")
         if submitted:
             user = get_user_by_email(email)
@@ -1284,19 +1277,12 @@ def page_auth():
                 st.error("Invalid email or password.")
             else:
                 if user.get("email", "").strip().lower() == ADMIN_EMAIL:
-                    if int(user.get("is_admin") or 0) != 1:
-                        if not ADMIN_SIGNUP_CODE:
-                            st.error("Admin access is locked until ADMIN_SIGNUP_CODE is configured.")
-                            return
-                        if admin_login_code.strip() != ADMIN_SIGNUP_CODE:
-                            st.error("Admin access code required for this account.")
-                            return
-                        update_user_fields(
-                            user["id"],
-                            is_admin=1,
-                            credit_balance=max(int(user.get("credit_balance") or 0), ADMIN_DEMO_CREDITS),
-                        )
-                        user = get_user_by_id(user["id"])
+                    update_user_fields(
+                        user["id"],
+                        is_admin=1,
+                        credit_balance=max(int(user.get("credit_balance") or 0), ADMIN_DEMO_CREDITS),
+                    )
+                    user = get_user_by_id(user["id"])
                 user = sync_user_billing(user)
                 set_current_user(user)
                 st.success("Signed in.")
@@ -1307,11 +1293,6 @@ def page_auth():
             full_name = st.text_input("Full name", key="signup_name")
             email = st.text_input("Email", key="signup_email")
             password = st.text_input("Password", type="password", key="signup_password")
-            admin_signup_code = st.text_input(
-                "Admin access code (admin only)",
-                type="password",
-                key="signup_admin_code",
-            )
             submitted = st.form_submit_button("Create Account")
         if submitted:
             if not full_name.strip() or not email.strip() or not password.strip():
@@ -1320,7 +1301,7 @@ def page_auth():
                 st.error("An account with that email already exists.")
             else:
                 try:
-                    user = create_user(full_name, email, password, admin_signup_code)
+                    user = create_user(full_name, email, password)
                     set_current_user(user)
                     st.success("Account created. You can use starter demo credits or subscribe below.")
                     st.rerun()

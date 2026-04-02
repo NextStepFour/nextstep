@@ -51,7 +51,6 @@ $env:STRIPE_PRICE_ID_STARTER="price_..."
 $env:STRIPE_PRICE_ID_PRO="price_..."
 $env:NEXTSTEP_DB_PATH="nextstep_portal.db"
 $env:ADMIN_EMAIL="rgordon@heliovolta.com"
-$env:ADMIN_SIGNUP_CODE="set-a-long-random-secret"
 ```
 
 ### macOS/Linux
@@ -64,7 +63,6 @@ export STRIPE_PRICE_ID_STARTER="price_..."
 export STRIPE_PRICE_ID_PRO="price_..."
 export NEXTSTEP_DB_PATH="nextstep_portal.db"
 export ADMIN_EMAIL="rgordon@heliovolta.com"
-export ADMIN_SIGNUP_CODE="set-a-long-random-secret"
 ```
 
 ## Run the app locally with Streamlit
@@ -102,7 +100,7 @@ https://app.yourdomain.com
 ## Notes
 
 - The current app keeps data in SQLite and can use `NEXTSTEP_DB_PATH` to point to a persistent file
-- Demo credit controls are intended for the admin account only and require both `ADMIN_EMAIL` and `ADMIN_SIGNUP_CODE`
+- Demo credit controls are intended for the admin account only and are tied to `ADMIN_EMAIL`
 - For a low-volume MVP, this can work on a host with a persistent disk
 - For a larger production rollout, move from SQLite to a hosted Postgres database
 
