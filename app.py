@@ -61,6 +61,7 @@ EVIDENCE_COLUMNS = [
     "matched_service",
     "company_name",
     "job_title",
+    "base_salary",
     "location",
     "country",
     "source_type",
@@ -79,6 +80,7 @@ EVIDENCE_COLUMNS = [
 COMPANY_COLUMNS = [
     "buyer_company",
     "job_posting_title",
+    "base_salary",
     "matched_services",
     "likely_buyer_department_general",
     "source_urls",
@@ -99,6 +101,7 @@ DISPLAY_NAME_MAP = {
     "date_generated": "Date Generated",
     "buyer_company": "Buyer Company",
     "job_posting_title": "Job Posting Title",
+    "base_salary": "Base Salary",
     "matched_services": "Matched Services",
     "likely_buyer_department_general": "Likely Buyer Department (General)",
     "source_urls": "Source URLs",
@@ -301,6 +304,7 @@ Return valid JSON only using this schema:
     {
       "company_name": null,
       "job_title": null,
+      "base_salary": null,
       "location": null,
       "country": null,
       "source_type": null,
@@ -337,6 +341,7 @@ Rules:
 - matching_responsibilities must be a list
 - matching_keywords must be a list
 - buyer_department should reflect the team most likely tied to the hiring signal when supported by the posting
+- base_salary should include only explicit base salary from the posting or source page
 - outreach_next_step should be a short, practical next step based only on the posting and likely buyer department
 - If a field is unknown, return null
 - source_url must be the public URL for the result
@@ -355,6 +360,7 @@ RESPONSE_SCHEMA = {
                 "properties": {
                     "company_name": {"type": ["string", "null"]},
                     "job_title": {"type": ["string", "null"]},
+                    "base_salary": {"type": ["string", "null"]},
                     "location": {"type": ["string", "null"]},
                     "country": {"type": ["string", "null"]},
                     "source_type": {"type": ["string", "null"]},
@@ -379,6 +385,7 @@ RESPONSE_SCHEMA = {
                 "required": [
                     "company_name",
                     "job_title",
+                    "base_salary",
                     "location",
                     "country",
                     "source_type",
@@ -1232,6 +1239,7 @@ def aggregate_companies(evidence_df):
         best = group.sort_values("match_score", ascending=False).iloc[0]
         matched_services = flatten_unique(group["matched_service"].tolist())
         urls = flatten_unique(group["source_url"].tolist())[:5]
+        salaries = flatten_unique(group["base_salary"].tolist())
         likely_buyer_department = (
             pd.Series([x for x in group["buyer_department"] if pd.notna(x) and str(x).strip()]).mode().iloc[0]
             if any(pd.notna(group["buyer_department"]))
@@ -1241,6 +1249,7 @@ def aggregate_companies(evidence_df):
             {
                 "buyer_company": safe_text(company, "Unknown Company"),
                 "job_posting_title": safe_text(job_title) or safe_text(best["job_title"]),
+                "base_salary": salaries[0] if salaries else None,
                 "matched_services": "; ".join(matched_services),
                 "likely_buyer_department_general": likely_buyer_department,
                 "source_urls": " | ".join(urls),
@@ -1260,6 +1269,7 @@ def merge_company_lists(company_df):
         best = group.iloc[0]
         matched_services = flatten_unique(group["matched_services"].tolist())
         source_urls = flatten_unique(group["source_urls"].tolist())[:5]
+        salaries = flatten_unique(group["base_salary"].tolist())
         likely_buyer_department = (
             pd.Series([x for x in group["likely_buyer_department_general"] if pd.notna(x) and str(x).strip()]).mode().iloc[0]
             if any(pd.notna(group["likely_buyer_department_general"]))
@@ -1269,6 +1279,7 @@ def merge_company_lists(company_df):
             {
                 "buyer_company": safe_text(buyer_company, "Unknown Company"),
                 "job_posting_title": safe_text(job_posting_title) or safe_text(best["job_posting_title"]),
+                "base_salary": salaries[0] if salaries else None,
                 "matched_services": "; ".join(matched_services),
                 "likely_buyer_department_general": likely_buyer_department,
                 "source_urls": " | ".join(source_urls),
@@ -1340,6 +1351,7 @@ def pdf_data(company_df, meta):
             [
                 Paragraph(escape(str(row["buyer_company"])), styles["Heading2"]),
                 Paragraph(escape(f"Job posting title: {row['job_posting_title'] or 'Unknown'}"), styles["Normal"]),
+                Paragraph(escape(f"Base salary: {row['base_salary'] or 'Unknown'}"), styles["Normal"]),
                 Paragraph(escape(f"Matched services: {row['matched_services']}"), styles["Normal"]),
                 Paragraph(escape(f"Likely buyer department: {row['likely_buyer_department_general'] or 'Unknown'}"), styles["Normal"]),
                 Paragraph(escape(f"Source URLs: {row['source_urls'] or 'Unknown'}"), styles["Normal"]),
