@@ -1148,6 +1148,16 @@ def safe_text(value, default=""):
     return text if text else default
 
 
+def split_service_values(value):
+    if pd.isna(value):
+        return []
+    if isinstance(value, list):
+        items = value
+    else:
+        items = str(value).split(";")
+    return [item.strip() for item in items if str(item).strip()]
+
+
 def ensure_company_columns(company_df):
     working = company_df.copy()
     for column in COMPANY_COLUMNS:
@@ -1751,10 +1761,36 @@ def page_saved_lists():
         st.info("Saved lists exist, but the master company list is still empty.")
         return
 
-    st.dataframe(pretty_df(master_company_df), use_container_width=True)
+    service_options = sorted(
+        {
+            service
+            for value in master_company_df["matched_services"].tolist()
+            for service in split_service_values(value)
+        }
+    )
+    selected_services = st.multiselect(
+        "Filter by Matched Services",
+        options=service_options,
+        help="Select one or more services to include only matching rows in the master list.",
+    )
+
+    filtered_company_df = master_company_df.copy()
+    if selected_services:
+        selected_set = set(selected_services)
+        filtered_company_df = filtered_company_df[
+            filtered_company_df["matched_services"].apply(
+                lambda value: bool(selected_set.intersection(split_service_values(value)))
+            )
+        ].reset_index(drop=True)
+
+    if filtered_company_df.empty:
+        st.info("No buyer company rows match the selected services.")
+        return
+
+    st.dataframe(pretty_df(filtered_company_df), use_container_width=True)
     st.download_button(
         "Download master company list as CSV",
-        data=csv_data(master_company_df),
+        data=csv_data(filtered_company_df),
         file_name="nextstepsignal_master_company_list.csv",
         mime="text/csv",
         key="master_company_csv",
