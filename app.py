@@ -80,9 +80,7 @@ COMPANY_COLUMNS = [
     "buyer_company",
     "job_posting_title",
     "matched_services",
-    "opportunity_score",
     "likely_buyer_department_general",
-    "best_matching_postings",
     "source_urls",
 ]
 EXPANSION_COLUMNS = [
@@ -102,9 +100,7 @@ DISPLAY_NAME_MAP = {
     "buyer_company": "Buyer Company",
     "job_posting_title": "Job Posting Title",
     "matched_services": "Matched Services",
-    "opportunity_score": "Opportunity Score",
     "likely_buyer_department_general": "Likely Buyer Department (General)",
-    "best_matching_postings": "Best Matching Posting",
     "source_urls": "Source URLs",
     "matched_service": "Matched Service",
     "company_name": "Company Name",
@@ -1186,31 +1182,22 @@ def aggregate_companies(evidence_df):
         best = group.sort_values("match_score", ascending=False).iloc[0]
         matched_services = flatten_unique(group["matched_service"].tolist())
         urls = flatten_unique(group["source_url"].tolist())[:5]
-        direct = int((group["match_type"] == "Direct").sum())
-        peripheral = int((group["match_type"] == "Peripheral").sum())
-        score = min(
-            100,
-            int(group["match_score"].max()) + min(len(group) - 1, 4) * 5 + min(direct, 2) * 5 + min(peripheral, 2) * 3,
-        )
         likely_buyer_department = (
             pd.Series([x for x in group["buyer_department"] if pd.notna(x) and str(x).strip()]).mode().iloc[0]
             if any(pd.notna(group["buyer_department"]))
             else None
         )
-        best_postings = flatten_unique(group.sort_values("match_score", ascending=False)["job_title"].tolist())[:5]
         rows.append(
             {
                 "buyer_company": safe_text(company, "Unknown Company"),
                 "job_posting_title": safe_text(job_title) or safe_text(best["job_title"]),
                 "matched_services": "; ".join(matched_services),
-                "opportunity_score": score,
                 "likely_buyer_department_general": likely_buyer_department,
-                "best_matching_postings": " | ".join(best_postings),
                 "source_urls": " | ".join(urls),
             }
         )
     df = pd.DataFrame(rows)
-    return df[COMPANY_COLUMNS].sort_values(["opportunity_score", "buyer_company"], ascending=[False, True]).reset_index(drop=True)
+    return df[COMPANY_COLUMNS].sort_values(["buyer_company", "job_posting_title"], ascending=[True, True]).reset_index(drop=True)
 
 
 def merge_company_lists(company_df):
@@ -1220,9 +1207,8 @@ def merge_company_lists(company_df):
     temp = ensure_company_columns(company_df)
     rows = []
     for (buyer_company, job_posting_title), group in temp.groupby(["buyer_company", "job_posting_title"], dropna=False):
-        best = group.sort_values("opportunity_score", ascending=False).iloc[0]
+        best = group.iloc[0]
         matched_services = flatten_unique(group["matched_services"].tolist())
-        best_postings = flatten_unique(group["best_matching_postings"].tolist())[:5]
         source_urls = flatten_unique(group["source_urls"].tolist())[:5]
         likely_buyer_department = (
             pd.Series([x for x in group["likely_buyer_department_general"] if pd.notna(x) and str(x).strip()]).mode().iloc[0]
@@ -1234,16 +1220,14 @@ def merge_company_lists(company_df):
                 "buyer_company": safe_text(buyer_company, "Unknown Company"),
                 "job_posting_title": safe_text(job_posting_title) or safe_text(best["job_posting_title"]),
                 "matched_services": "; ".join(matched_services),
-                "opportunity_score": int(best["opportunity_score"]) if pd.notna(best["opportunity_score"]) else 0,
                 "likely_buyer_department_general": likely_buyer_department,
-                "best_matching_postings": " | ".join(best_postings),
                 "source_urls": " | ".join(source_urls),
             }
         )
 
     return pd.DataFrame(rows)[COMPANY_COLUMNS].sort_values(
-        ["opportunity_score", "buyer_company"],
-        ascending=[False, True],
+        ["buyer_company", "job_posting_title"],
+        ascending=[True, True],
     ).reset_index(drop=True)
 
 
@@ -1306,10 +1290,8 @@ def pdf_data(company_df, meta):
             [
                 Paragraph(escape(str(row["buyer_company"])), styles["Heading2"]),
                 Paragraph(escape(f"Job posting title: {row['job_posting_title'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Opportunity score: {row['opportunity_score']}"), styles["Normal"]),
                 Paragraph(escape(f"Matched services: {row['matched_services']}"), styles["Normal"]),
                 Paragraph(escape(f"Likely buyer department: {row['likely_buyer_department_general'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Best matching posting: {row['best_matching_postings'] or 'Unknown'}"), styles["Normal"]),
                 Paragraph(escape(f"Source URLs: {row['source_urls'] or 'Unknown'}"), styles["Normal"]),
                 Spacer(1, 10),
             ]
@@ -1427,8 +1409,8 @@ def build_master_saved_data():
         if column not in master_company_df.columns:
             master_company_df[column] = None
     return master_company_df.sort_values(
-        ["_date_generated_sort", "opportunity_score", "buyer_company"],
-        ascending=[False, False, True],
+        ["_date_generated_sort", "buyer_company", "job_posting_title"],
+        ascending=[False, True, True],
     ).reset_index(drop=True)[visible_columns]
 
 
