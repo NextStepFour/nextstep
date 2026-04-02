@@ -148,6 +148,86 @@ DISPLAY_NAME_MAP = {
 st.set_page_config(page_title=APP_NAME, layout="wide")
 
 
+def inject_global_styles():
+    st.markdown(
+        """
+        <style>
+        :root {
+            --brand-blue: #60a5fa;
+            --brand-blue-dark: #4f95ec;
+            --brand-blue-soft: rgba(96, 165, 250, 0.14);
+            --brand-border: rgba(96, 165, 250, 0.35);
+            --panel-border: rgba(255, 255, 255, 0.08);
+        }
+        .stApp h1, .stApp h2, .stApp h3 {
+            color: #dbeafe;
+        }
+        .stApp a {
+            color: var(--brand-blue);
+        }
+        .stButton > button,
+        .stDownloadButton > button,
+        .stFormSubmitButton > button {
+            background: var(--brand-blue);
+            color: #0f172a;
+            border: 1px solid var(--brand-blue);
+            border-radius: 0.75rem;
+            font-weight: 650;
+        }
+        .stButton > button:hover,
+        .stDownloadButton > button:hover,
+        .stFormSubmitButton > button:hover {
+            background: var(--brand-blue-dark);
+            border-color: var(--brand-blue-dark);
+            color: #0f172a;
+        }
+        .stButton > button[kind="secondary"] {
+            background: transparent;
+            color: #dbeafe;
+            border: 1px solid var(--brand-border);
+        }
+        .stButton > button[kind="secondary"]:hover {
+            background: var(--brand-blue-soft);
+            color: #e0f2fe;
+            border-color: var(--brand-blue);
+        }
+        [data-baseweb="tab-list"] {
+            gap: 0.4rem;
+        }
+        [data-baseweb="tab"] {
+            border-radius: 0.65rem 0.65rem 0 0;
+        }
+        [data-baseweb="tab"][aria-selected="true"] {
+            color: var(--brand-blue) !important;
+            border-bottom-color: var(--brand-blue) !important;
+        }
+        [data-baseweb="select"] > div,
+        .stTextInput > div > div > input,
+        .stTextArea textarea,
+        .stNumberInput input {
+            border-color: var(--panel-border);
+            border-radius: 0.75rem;
+        }
+        [data-testid="stMetric"] {
+            border: 1px solid var(--panel-border);
+            border-radius: 0.95rem;
+            padding: 0.9rem 1rem;
+            background: rgba(255, 255, 255, 0.02);
+        }
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3 {
+            color: #dbeafe;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+inject_global_styles()
+
+
 PROMPT_TEMPLATE = """You are a market intelligence engine for solar service sales.
 
 Your task is to search the public web for U.S. solar job postings, recently filled roles, RFPs, and similar opportunities from the last {{TIME_WINDOW}} that overlap with the service description below.
@@ -1380,10 +1460,10 @@ def page_billing(user):
         """
         <style>
         .pricing-card {
-            border: 1px solid rgba(255,255,255,0.10);
+            border: 1px solid var(--brand-border);
             border-radius: 1rem;
             padding: 1.2rem 1.15rem 1rem 1.15rem;
-            background: rgba(255,255,255,0.02);
+            background: rgba(96, 165, 250, 0.06);
             min-height: 100%;
         }
         .pricing-plan-name {
@@ -1395,7 +1475,7 @@ def page_billing(user):
             font-size: 3rem;
             line-height: 1;
             font-weight: 800;
-            color: #93c5fd;
+            color: var(--brand-blue);
             margin-bottom: 0.1rem;
         }
         .pricing-period {
@@ -1419,19 +1499,19 @@ def page_billing(user):
             text-align: center;
             padding: 0.7rem 0.95rem;
             border-radius: 0.7rem;
-            background: #60a5fa;
+            background: var(--brand-blue);
             color: #0f172a !important;
             font-weight: 650;
             text-decoration: none !important;
-            border: 1px solid #60a5fa;
+            border: 1px solid var(--brand-blue);
             margin-top: 0.2rem;
             margin-bottom: 0.95rem;
             font-size: 0.98rem;
             line-height: 1.2;
         }
         .plan-checkout-link:hover {
-            background: #4f95ec;
-            border-color: #4f95ec;
+            background: var(--brand-blue-dark);
+            border-color: var(--brand-blue-dark);
         }
         .pricing-feature {
             margin-bottom: 0.35rem;
@@ -1565,11 +1645,12 @@ def page_generate():
     high_volume = st.checkbox("High volume mode (broader search, more opportunities, lower precision)", value=True)
     available_credits = credits()
     result_limit_cap = min(20, max(3, available_credits)) if available_credits else 3
-    result_limit = st.slider(
+    result_limit_options = list(range(3, result_limit_cap + 1))
+    default_result_limit = min(10, result_limit_cap)
+    result_limit = st.selectbox(
         "Buyer company result limit",
-        min_value=3,
-        max_value=result_limit_cap,
-        value=min(10, result_limit_cap),
+        options=result_limit_options,
+        index=result_limit_options.index(default_result_limit),
         help="You are charged based on the final buyer companies returned, up to this limit.",
     )
     estimated_range, estimate_basis = estimate_search_time(
@@ -1578,8 +1659,10 @@ def page_generate():
         time_window,
     )
     basis_text = "based on your recent runs" if estimate_basis == "history" else "based on current settings"
-    st.caption(
-        f"Credits remaining: {available_credits} | This search will cost between 3 and {result_limit} credits depending on buyer companies returned | Estimated search time: {format_duration_range_text(estimated_range[0], estimated_range[1])} ({basis_text})"
+    st.info(
+        f"Credits remaining: {available_credits}\n\n"
+        f"This search will cost between 3 and {result_limit} credits depending on buyer companies returned.\n\n"
+        f"Estimated search time: {format_duration_range_text(estimated_range[0], estimated_range[1])} ({basis_text})."
     )
     st.caption("Search time can still vary because live web search depends on outside websites and OpenAI response time.")
 
