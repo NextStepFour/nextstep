@@ -1615,6 +1615,54 @@ def page_billing(user):
         '<div style="display:inline-block; background: rgba(96, 165, 250, 0.18); color: #dbeafe; padding: 0.45rem 0.65rem; border-radius: 0.45rem; font-weight: 600; margin-bottom: 1rem;">Choose a monthly credit plan for buyer-company market intelligence.</div>',
         unsafe_allow_html=True,
     )
+    st.markdown(
+        """
+        <style>
+        .billing-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.75rem;
+            margin: 0.25rem 0 1rem 0;
+        }
+        .billing-summary-card {
+            border: 1px solid var(--panel-border);
+            border-radius: 0.9rem;
+            padding: 0.8rem 0.9rem;
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .billing-summary-label {
+            font-size: 0.82rem;
+            color: #93c5fd;
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .billing-summary-value {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #eff6ff;
+            line-height: 1.15;
+        }
+        @media (max-width: 1100px) {
+            .billing-summary-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        (
+            '<div class="billing-summary-grid">'
+            f'<div class="billing-summary-card"><div class="billing-summary-label">Credits Remaining</div><div class="billing-summary-value">{credits(user["id"])}</div></div>'
+            f'<div class="billing-summary-card"><div class="billing-summary-label">Subscription Status</div><div class="billing-summary-value">{escape(user.get("subscription_status", "inactive").title())}</div></div>'
+            f'<div class="billing-summary-card"><div class="billing-summary-label">Current Plan</div><div class="billing-summary-value">{escape(user.get("plan_name") or "None")}</div></div>'
+            '</div>'
+        ),
+        unsafe_allow_html=True,
+    )
 
     st.markdown(
         """
