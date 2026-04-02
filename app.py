@@ -25,13 +25,6 @@ DEFAULT_CREDITS = 50
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "rgordon@heliovolta.com").strip().lower()
 ADMIN_DEMO_CREDITS = int(os.getenv("ADMIN_DEMO_CREDITS", "100"))
 TIME_OPTIONS = ["1 week", "2 weeks", "1 month", "2 months", "3 months"]
-TIME_OPTION_LABELS = {
-    "1 week": "1 week = freshest",
-    "2 weeks": "2 weeks = freshest",
-    "1 month": "1 month = balanced",
-    "2 months": "2 months = broader",
-    "3 months": "3 months = broadest, lower freshness",
-}
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8501")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 DISCOVERY_MODEL = os.getenv("OPENAI_DISCOVERY_MODEL", "gpt-5-mini")
@@ -1869,12 +1862,7 @@ def page_generate():
     options = {f"{row['id']} - {row['service_name']}": row for _, row in svc.iterrows()}
     selected = st.multiselect("Select saved services", list(options.keys()))
     location_filter = st.text_input("Location filter", value="Any U.S. location")
-    time_window = st.selectbox(
-        "Time window",
-        TIME_OPTIONS,
-        index=2,
-        format_func=lambda value: TIME_OPTION_LABELS.get(value, value),
-    )
+    time_window = st.selectbox("Time window", TIME_OPTIONS, index=2)
     high_volume = st.checkbox("High volume mode (broader search, more opportunities, lower precision)", value=True)
     available_credits = credits()
     result_limit_cap = min(20, max(3, available_credits)) if available_credits else 3
@@ -2033,13 +2021,7 @@ def page_potential_expansions():
     options = {f"{row['id']} - {row['service_name']}": row for _, row in svc.iterrows()}
     selected = st.multiselect("Select 3 or more services", list(options.keys()))
     location_filter = st.text_input("Location filter", value="Any U.S. location", key="exp_location")
-    time_window = st.selectbox(
-        "Time window",
-        TIME_OPTIONS,
-        index=2,
-        key="exp_time",
-        format_func=lambda value: TIME_OPTION_LABELS.get(value, value),
-    )
+    time_window = st.selectbox("Time window", TIME_OPTIONS, index=2, key="exp_time")
     high_volume = st.checkbox(
         "High volume mode (broader search, more opportunity signals)",
         value=True,
