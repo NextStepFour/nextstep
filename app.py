@@ -219,6 +219,102 @@ def inject_global_styles():
         [data-testid="stSidebar"] h3 {
             color: #dbeafe;
         }
+        [data-testid="stSidebar"] > div:first-child {
+            background: #f8fbff;
+        }
+        [data-testid="stSidebar"] {
+            border-right: 1px solid rgba(148, 163, 184, 0.18);
+        }
+        [data-testid="stSidebar"] .stMarkdown,
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] label {
+            color: #0f172a !important;
+        }
+        [data-testid="stSidebar"] [data-testid="stMetric"] {
+            display: none;
+        }
+        [data-testid="stSidebar"] [data-baseweb="radio"] {
+            margin-bottom: 0.35rem;
+            border-radius: 0.8rem;
+            padding: 0.08rem 0.2rem;
+        }
+        [data-testid="stSidebar"] [data-baseweb="radio"] > div {
+            background: transparent !important;
+        }
+        [data-testid="stSidebar"] [data-baseweb="radio"] label,
+        [data-testid="stSidebar"] [data-baseweb="radio"] div[role="radio"] {
+            width: 100%;
+        }
+        [data-testid="stSidebar"] [data-baseweb="radio"]:has(input:checked) {
+            background: #4f7cf0;
+            box-shadow: 0 10px 22px rgba(79, 124, 240, 0.22);
+        }
+        [data-testid="stSidebar"] [data-baseweb="radio"]:has(input:checked) p,
+        [data-testid="stSidebar"] [data-baseweb="radio"]:has(input:checked) label,
+        [data-testid="stSidebar"] [data-baseweb="radio"]:has(input:checked) span {
+            color: #ffffff !important;
+            font-weight: 600;
+        }
+        [data-testid="stSidebar"] [data-baseweb="radio"] p,
+        [data-testid="stSidebar"] [data-baseweb="radio"] span {
+            font-size: 0.97rem;
+        }
+        [data-testid="stSidebar"] .sidebar-brand {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #111827;
+            margin-bottom: 0.2rem;
+        }
+        [data-testid="stSidebar"] .sidebar-card {
+            background: #ffffff;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 1rem;
+            padding: 1rem 0.95rem;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+            margin-bottom: 0.95rem;
+        }
+        [data-testid="stSidebar"] .sidebar-user-name {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 0.2rem;
+        }
+        [data-testid="stSidebar"] .sidebar-user-email {
+            font-size: 0.9rem;
+            color: #475569;
+            margin-bottom: 0.8rem;
+            word-break: break-word;
+        }
+        [data-testid="stSidebar"] .sidebar-mini-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.45rem;
+        }
+        [data-testid="stSidebar"] .sidebar-mini-item {
+            background: #f8fbff;
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            border-radius: 0.75rem;
+            padding: 0.45rem 0.4rem;
+            text-align: center;
+        }
+        [data-testid="stSidebar"] .sidebar-mini-label {
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            margin-bottom: 0.18rem;
+        }
+        [data-testid="stSidebar"] .sidebar-mini-value {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1.15;
+        }
+        [data-testid="stSidebar"] button[kind="secondary"],
+        [data-testid="stSidebar"] button[kind="primary"] {
+            width: 100%;
+            border-radius: 0.8rem;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -2170,37 +2266,54 @@ if not user:
     page_auth()
 else:
     with st.sidebar:
-        st.title(APP_NAME)
-        st.write(user["full_name"])
-        st.write(user["email"])
-        st.metric("Credits Remaining", credits(user["id"]))
-        st.write(f"Plan: {user.get('plan_name') or 'None'}")
-        st.write(f"Status: {user.get('subscription_status', 'inactive').title()}")
-        nav_options = ["Dashboard", "Plans & Billing", "Service Profiles", "Generate List", "Saved Lists", "Potential Expansions"]
+        st.markdown(f'<div class="sidebar-brand">{APP_NAME}</div>', unsafe_allow_html=True)
+        st.markdown(
+            (
+                '<div class="sidebar-card">'
+                f'<div class="sidebar-user-name">{escape(user["full_name"])}</div>'
+                f'<div class="sidebar-user-email">{escape(user["email"])}</div>'
+                '<div class="sidebar-mini-grid">'
+                f'<div class="sidebar-mini-item"><div class="sidebar-mini-label">Credits</div><div class="sidebar-mini-value">{credits(user["id"])}</div></div>'
+                f'<div class="sidebar-mini-item"><div class="sidebar-mini-label">Plan</div><div class="sidebar-mini-value">{escape(user.get("plan_name") or "None")}</div></div>'
+                f'<div class="sidebar-mini-item"><div class="sidebar-mini-label">Status</div><div class="sidebar-mini-value">{escape(user.get("subscription_status", "inactive").title())}</div></div>'
+                '</div>'
+                '</div>'
+            ),
+            unsafe_allow_html=True,
+        )
+        nav_options = [
+            "⌂  Dashboard",
+            "◫  Plans & Billing",
+            "▣  Service Profiles",
+            "➜  Generate List",
+            "☰  Saved Lists",
+            "✦  Potential Expansions",
+        ]
         if is_admin_user(user):
-            nav_options.append("Users")
+            nav_options.append("⚙  Users")
         page = st.radio(
             "Navigate",
             nav_options,
+            label_visibility="collapsed",
         )
-        if st.button("Sign Out"):
+        if st.button("Sign Out", type="secondary"):
             set_current_user(None)
             st.rerun()
 
-    if page == "Plans & Billing":
+    if page == "◫  Plans & Billing":
         page_billing(user)
     elif not portal_access_allowed(user):
         st.warning("Your account needs an active subscription or available demo credits to use the portal.")
         page_billing(user)
-    elif page == "Dashboard":
+    elif page == "⌂  Dashboard":
         page_dashboard()
-    elif page == "Service Profiles":
+    elif page == "▣  Service Profiles":
         page_services()
-    elif page == "Generate List":
+    elif page == "➜  Generate List":
         page_generate()
-    elif page == "Potential Expansions":
+    elif page == "✦  Potential Expansions":
         page_potential_expansions()
-    elif page == "Users" and is_admin_user(user):
+    elif page == "⚙  Users" and is_admin_user(user):
         page_users()
     else:
         page_saved_lists()
