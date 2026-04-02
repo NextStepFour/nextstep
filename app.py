@@ -845,6 +845,16 @@ def checkout_url_for_plan(user, plan_key):
     return session.url
 
 
+def get_cached_checkout_url(user, plan_key):
+    cache_key = f"checkout_url_{user['id']}_{plan_key}"
+    cached = st.session_state.get(cache_key)
+    if cached:
+        return cached
+    url = checkout_url_for_plan(user, plan_key)
+    st.session_state[cache_key] = url
+    return url
+
+
 def billing_portal_url(user):
     if not user.get("stripe_customer_id"):
         raise ValueError("No Stripe customer found for this account yet.")
@@ -1325,6 +1335,32 @@ def page_billing(user):
     st.metric("Subscription Status", user.get("subscription_status", "inactive").title())
     st.metric("Current Plan", user.get("plan_name") or "None")
 
+    st.markdown(
+        """
+        <style>
+        .starter-checkout-link {
+            display: block;
+            width: 100%;
+            text-align: center;
+            padding: 0.7rem 1rem;
+            border-radius: 0.8rem;
+            background: #7dd3fc;
+            color: #0f172a !important;
+            font-weight: 700;
+            text-decoration: none !important;
+            border: 1px solid #7dd3fc;
+            margin-top: 0.25rem;
+            margin-bottom: 0.25rem;
+        }
+        .starter-checkout-link:hover {
+            background: #67c4f4;
+            border-color: #67c4f4;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     col1, col2 = st.columns(2)
     for col, plan_key in zip([col1, col2], ["starter", "pro"]):
         plan = PLANS[plan_key]
@@ -1332,12 +1368,22 @@ def page_billing(user):
             st.markdown(f"**{plan['name']}**")
             st.write(f"{plan['monthly_credits']} credits per month")
             if stripe_ready() and plan["price_id"]:
-                if st.button(f"Subscribe to {plan['name']}", key=f"subscribe_{plan_key}"):
-                    try:
-                        url = checkout_url_for_plan(user, plan_key)
-                        st.markdown(f"[Open Stripe Checkout]({url})")
-                    except Exception as exc:
-                        st.error(f"Stripe checkout could not be created: {exc}")
+                try:
+                    url = get_cached_checkout_url(user, plan_key)
+                    if plan_key == "starter":
+                        st.markdown(
+                            f'<a class="starter-checkout-link" href="{url}" target="_self">Subscribe to {plan["name"]}</a>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.link_button(
+                            f"Subscribe to {plan['name']}",
+                            url,
+                            type="secondary",
+                            use_container_width=True,
+                        )
+                except Exception as exc:
+                    st.error(f"Stripe checkout could not be created: {exc}")
             else:
                 st.info(f"Set the Stripe price ID for {plan['name']} to enable checkout.")
 
