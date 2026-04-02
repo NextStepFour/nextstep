@@ -1163,7 +1163,7 @@ def aggregate_companies(evidence_df):
     temp = evidence_df.copy()
     temp["posted_date_parsed"] = pd.to_datetime(temp["posted_date"], errors="coerce")
     rows = []
-    for company, group in temp.groupby("company_name", dropna=False):
+    for (company, job_title), group in temp.groupby(["company_name", "job_title"], dropna=False):
         best = group.sort_values("match_score", ascending=False).iloc[0]
         matched_services = flatten_unique(group["matched_service"].tolist())
         urls = flatten_unique(group["source_url"].tolist())[:5]
@@ -1182,7 +1182,7 @@ def aggregate_companies(evidence_df):
         rows.append(
             {
                 "buyer_company": safe_text(company, "Unknown Company"),
-                "job_posting_title": safe_text(best["job_title"]),
+                "job_posting_title": safe_text(job_title) or safe_text(best["job_title"]),
                 "matched_services": "; ".join(matched_services),
                 "opportunity_score": score,
                 "likely_buyer_department_general": likely_buyer_department,
@@ -1200,7 +1200,7 @@ def merge_company_lists(company_df):
 
     temp = ensure_company_columns(company_df)
     rows = []
-    for buyer_company, group in temp.groupby("buyer_company", dropna=False):
+    for (buyer_company, job_posting_title), group in temp.groupby(["buyer_company", "job_posting_title"], dropna=False):
         best = group.sort_values("opportunity_score", ascending=False).iloc[0]
         matched_services = flatten_unique(group["matched_services"].tolist())
         best_postings = flatten_unique(group["best_matching_postings"].tolist())[:5]
@@ -1213,7 +1213,7 @@ def merge_company_lists(company_df):
         rows.append(
             {
                 "buyer_company": safe_text(buyer_company, "Unknown Company"),
-                "job_posting_title": safe_text(best["job_posting_title"]),
+                "job_posting_title": safe_text(job_posting_title) or safe_text(best["job_posting_title"]),
                 "matched_services": "; ".join(matched_services),
                 "opportunity_score": int(best["opportunity_score"]) if pd.notna(best["opportunity_score"]) else 0,
                 "likely_buyer_department_general": likely_buyer_department,
