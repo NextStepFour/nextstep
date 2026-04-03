@@ -730,6 +730,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
                 service_category TEXT NOT NULL DEFAULT 'General',
+                service_order INTEGER,
                 service_name TEXT NOT NULL,
                 service_description TEXT NOT NULL,
                 target_location TEXT NOT NULL,
@@ -793,6 +794,8 @@ def init_db():
             db.execute("ALTER TABLE services ADD COLUMN user_id INTEGER")
         if "service_category" not in service_columns:
             db.execute("ALTER TABLE services ADD COLUMN service_category TEXT NOT NULL DEFAULT 'General'")
+        if "service_order" not in service_columns:
+            db.execute("ALTER TABLE services ADD COLUMN service_order INTEGER")
         search_columns = [row["name"] for row in db.execute("PRAGMA table_info(searches)").fetchall()]
         if "user_id" not in search_columns:
             db.execute("ALTER TABLE searches ADD COLUMN user_id INTEGER")
@@ -919,7 +922,7 @@ def services_df(user_id=None):
         return pd.DataFrame()
     with conn() as db:
         rows = db.execute(
-            "SELECT * FROM services WHERE user_id = ? ORDER BY id DESC",
+            "SELECT * FROM services WHERE user_id = ? ORDER BY service_category ASC, COALESCE(service_order, 999999) ASC, created_at ASC, id ASC",
             (user["id"],),
         ).fetchall()
     return pd.DataFrame([dict(r) for r in rows])
@@ -982,17 +985,23 @@ def save_service(category, name, description, location_filter, user_id=None):
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user:
         raise ValueError("Please sign in to save service profiles.")
+    category_name = category.strip() or "General"
     with conn() as db:
+        next_order = db.execute(
+            "SELECT COALESCE(MAX(service_order), 0) + 1 FROM services WHERE user_id = ? AND service_category = ?",
+            (user["id"], category_name),
+        ).fetchone()[0]
         db.execute(
             """
             INSERT INTO services (
-                user_id, service_category, service_name, service_description, target_location,
+                user_id, service_category, service_order, service_name, service_description, target_location,
                 default_time_window, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user["id"],
-                category.strip() or "General",
+                category_name,
+                int(next_order or 1),
                 name.strip(),
                 description.strip(),
                 location_filter.strip(),
@@ -1006,33 +1015,126 @@ def update_service_profile(service_id, category, name, description, location_fil
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user:
         raise ValueError("Please sign in to update service profiles.")
+    service_id = int(service_id)
     with conn() as db:
+        existing = db.execute(
+            "SELECT * FROM services WHERE id = ? AND user_id = ?",
+            (service_id, user["id"]),
+        ).fetchone()
+        if not existing:
+            raise ValueError("Service profile not found.")
+        existing = dict(existing)
+        new_category = category.strip() or "General"
+        new_order = existing.get("service_order")
+        if safe_text(existing.get("service_category"), "General") != new_category:
+            next_order = db.execute(
+                "SELECT COALESCE(MAX(service_order), 0) + 1 FROM services WHERE user_id = ? AND service_category = ?",
+                (user["id"], new_category),
+            ).fetchone()[0]
+            new_order = int(next_order or 1)
         db.execute(
             """
             UPDATE services
-            SET service_category = ?, service_name = ?, service_description = ?, target_location = ?
+            SET service_category = ?, service_order = ?, service_name = ?, service_description = ?, target_location = ?
             WHERE id = ? AND user_id = ?
             """,
             (
-                category.strip() or "General",
+                new_category,
+                int(new_order or 1),
                 name.strip(),
                 description.strip(),
                 location_filter.strip(),
-                int(service_id),
+                service_id,
                 user["id"],
             ),
         )
+    if safe_text(existing.get("service_category"), "General") != new_category:
+        resequence_service_category(existing.get("service_category"), user["id"])
+    resequence_service_category(new_category, user["id"])
 
 
 def delete_service(service_id, user_id=None):
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user:
         raise ValueError("Please sign in to delete service profiles.")
+    category_name = None
+    with conn() as db:
+        existing = db.execute(
+            "SELECT service_category FROM services WHERE id = ? AND user_id = ?",
+            (int(service_id), user["id"]),
+        ).fetchone()
+        if existing:
+            category_name = existing["service_category"]
+    if not category_name:
+        return
     with conn() as db:
         db.execute(
             "DELETE FROM services WHERE id = ? AND user_id = ?",
             (int(service_id), user["id"]),
         )
+    resequence_service_category(category_name, user["id"])
+
+
+def resequence_service_category(category_name, user_id=None):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user:
+        return
+    category_name = safe_text(category_name, "General")
+    with conn() as db:
+        rows = db.execute(
+            """
+            SELECT id
+            FROM services
+            WHERE user_id = ? AND service_category = ?
+            ORDER BY COALESCE(service_order, 999999) ASC, created_at ASC, id ASC
+            """,
+            (user["id"], category_name),
+        ).fetchall()
+        for index, row in enumerate(rows, start=1):
+            db.execute(
+                "UPDATE services SET service_order = ? WHERE id = ? AND user_id = ?",
+                (index, row["id"], user["id"]),
+            )
+
+
+def ensure_service_orders(user_id=None):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user:
+        return
+    svc = services_df(user["id"])
+    if svc.empty:
+        return
+    for category_name in flatten_unique(svc["service_category"].tolist()):
+        resequence_service_category(category_name, user["id"])
+
+
+def move_service_within_category(service_id, direction, user_id=None):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user:
+        raise ValueError("Please sign in to reorder service profiles.")
+    service_id = int(service_id)
+    ensure_service_orders(user["id"])
+    svc = prepare_service_map_df(services_df(user["id"]))
+    row_match = svc[svc["id"] == service_id]
+    if row_match.empty:
+        return
+    row = row_match.iloc[0]
+    category_name = safe_text(row["service_category"], "General")
+    category_df = svc[svc["service_category"] == category_name].copy().reset_index(drop=True)
+    current_idx = int(category_df.index[category_df["id"] == service_id][0])
+    if direction == "up":
+        swap_idx = current_idx - 1
+    else:
+        swap_idx = current_idx + 1
+    if swap_idx < 0 or swap_idx >= len(category_df):
+        return
+    current_order = int(category_df.iloc[current_idx]["service_order"])
+    swap_order = int(category_df.iloc[swap_idx]["service_order"])
+    swap_id = int(category_df.iloc[swap_idx]["id"])
+    with conn() as db:
+        db.execute("UPDATE services SET service_order = ? WHERE id = ? AND user_id = ?", (swap_order, service_id, user["id"]))
+        db.execute("UPDATE services SET service_order = ? WHERE id = ? AND user_id = ?", (current_order, swap_id, user["id"]))
+    resequence_service_category(category_name, user["id"])
 
 
 def build_service_option_map(svc_df):
@@ -1050,8 +1152,15 @@ def prepare_service_map_df(svc_df):
         return pd.DataFrame()
     working = svc_df.copy()
     working["service_category"] = working["service_category"].fillna("General").replace("", "General")
+    if "service_order" not in working.columns:
+        working["service_order"] = None
     working["_created_at_sort"] = pd.to_datetime(working["created_at"], errors="coerce")
-    working = working.sort_values(["service_category", "_created_at_sort", "id"], ascending=[True, True, True]).reset_index(drop=True)
+    working["_service_order_sort"] = pd.to_numeric(working["service_order"], errors="coerce")
+    working = working.sort_values(
+        ["service_category", "_service_order_sort", "_created_at_sort", "id"],
+        ascending=[True, True, True, True],
+        na_position="last",
+    ).reset_index(drop=True)
     working["service_number"] = working.groupby("service_category").cumcount() + 1
     return working
 
@@ -3113,6 +3222,7 @@ def page_services():
             save_service(category, name, description, location_filter)
             st.success("Service profile saved.")
             st.rerun()
+    ensure_service_orders()
     svc = services_df()
     if svc.empty:
         st.info("No service profiles saved yet.")
@@ -3146,6 +3256,30 @@ def page_services():
                 color: #cbd5e1;
                 line-height: 1.45;
             }
+            .service-quick-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.8rem;
+                margin-bottom: 1.05rem;
+            }
+            .service-quick-tile {
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 0.9rem;
+                background: rgba(15, 23, 42, 0.34);
+                padding: 0.8rem 0.85rem;
+            }
+            .service-quick-tile.active {
+                border-color: var(--brand-blue);
+                background: rgba(96, 165, 250, 0.10);
+                box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.20) inset;
+            }
+            .service-quick-label {
+                color: #eff6ff;
+                font-weight: 800;
+                line-height: 1.45;
+                margin-bottom: 0.65rem;
+                word-break: break-word;
+            }
             .service-chip-grid {
                 display: grid;
                 grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3162,6 +3296,11 @@ def page_services():
                 display: flex;
                 flex-direction: column;
                 justify-content: space-between;
+            }
+            .service-chip-tile.active {
+                border-color: var(--brand-blue);
+                background: linear-gradient(180deg, rgba(96, 165, 250, 0.14), rgba(255,255,255,0.03));
+                box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.18) inset, 0 12px 28px rgba(15, 23, 42, 0.12);
             }
             .service-chip-label {
                 font-size: 1rem;
@@ -3184,11 +3323,13 @@ def page_services():
                 min-height: 58px;
             }
             @media (max-width: 960px) {
+                .service-quick-grid,
                 .service-chip-grid {
                     grid-template-columns: 1fr 1fr;
                 }
             }
             @media (max-width: 640px) {
+                .service-quick-grid,
                 .service-chip-grid {
                     grid-template-columns: 1fr;
                 }
@@ -3208,6 +3349,7 @@ def page_services():
 
         rename_id = st.session_state.get("service_rename_id")
         delete_id = st.session_state.get("service_delete_id")
+        focus_id = st.session_state.get("service_focus_id")
         for category_name, category_df in svc.groupby("service_category", sort=False):
             st.markdown(
                 (
@@ -3218,6 +3360,37 @@ def page_services():
                 ),
                 unsafe_allow_html=True,
             )
+            st.markdown('<div class="service-quick-grid">', unsafe_allow_html=True)
+            quick_columns = st.columns(3)
+            for quick_idx, (_, row) in enumerate(category_df.iterrows()):
+                service_id = int(row["id"])
+                service_number = int(row["service_number"])
+                with quick_columns[quick_idx % 3]:
+                    active_class = " active" if focus_id == service_id else ""
+                    st.markdown(
+                        (
+                            f'<div class="service-quick-tile{active_class}">'
+                            f'<div class="service-quick-label">#{service_number} | {escape(safe_text(row["service_category"], "General"))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
+                            '</div>'
+                        ),
+                        unsafe_allow_html=True,
+                    )
+                    mini1, mini2, mini3 = st.columns(3)
+                    if mini1.button("Edit", key=f"quick_edit_{service_id}", use_container_width=True):
+                        st.session_state["service_rename_id"] = service_id
+                        st.session_state["service_focus_id"] = service_id
+                        st.session_state.pop("service_delete_id", None)
+                        st.rerun()
+                    if mini2.button("↑", key=f"quick_up_{service_id}", use_container_width=True):
+                        move_service_within_category(service_id, "up")
+                        st.session_state["service_focus_id"] = service_id
+                        st.rerun()
+                    if mini3.button("↓", key=f"quick_down_{service_id}", use_container_width=True):
+                        move_service_within_category(service_id, "down")
+                        st.session_state["service_focus_id"] = service_id
+                        st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+
             st.markdown('<div class="service-chip-grid">', unsafe_allow_html=True)
             tile_columns = st.columns(3)
 
@@ -3230,9 +3403,10 @@ def page_services():
                 created_text = format_short_date(row["created_at"]) or safe_text(row["created_at"], "")
 
                 with tile_columns[idx % 3]:
+                    active_class = " active" if focus_id == service_id else ""
                     st.markdown(
                         (
-                            '<div class="service-chip-tile">'
+                            f'<div class="service-chip-tile{active_class}">'
                             f'<div class="service-chip-label">#{service_number} | {escape(safe_text(row["service_category"], "General"))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
                             f'<div class="service-chip-description">{escape(description_preview or "No description available.")}</div>'
                             '<div class="service-chip-meta">'
@@ -3247,10 +3421,12 @@ def page_services():
                     action_col1, action_col2 = st.columns(2)
                     if action_col1.button("Edit Service", key=f"edit_service_{service_id}", use_container_width=True):
                         st.session_state["service_rename_id"] = service_id
+                        st.session_state["service_focus_id"] = service_id
                         st.session_state.pop("service_delete_id", None)
                         st.rerun()
                     if action_col2.button("Delete", key=f"delete_service_{service_id}", use_container_width=True):
                         st.session_state["service_delete_id"] = service_id
+                        st.session_state["service_focus_id"] = service_id
                         st.session_state.pop("service_rename_id", None)
                         st.rerun()
 
