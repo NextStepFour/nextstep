@@ -2983,7 +2983,7 @@ def page_next_steps():
                 for _, job_row in other_jobs_df.iterrows():
                     render_next_steps_job_block(job_row)
 
-            st.markdown('<div class="nextsteps-section-label">Company Deep Dive</div>', unsafe_allow_html=True)
+            st.markdown('<div class="nextsteps-section-label">Expanded Search</div>', unsafe_allow_html=True)
             matched_services_text = safe_text(company_row.get("matched_services"))
             company_cache_key = f"{safe_text(company_name)}::{matched_services_text}"
             deep_dive_entry = deep_dive_cache.get(company_cache_key)
@@ -2995,7 +2995,7 @@ def page_next_steps():
             ):
                 current_balance = credits()
                 if current_balance < COMPANY_DEEP_DIVE_COST:
-                    st.error(f"You need at least {COMPANY_DEEP_DIVE_COST} credits to run a company deep dive.")
+                    st.error(f"You need at least {COMPANY_DEEP_DIVE_COST} credits to run an expanded search.")
                 else:
                     try:
                         with st.spinner(f"Searching for additional public postings from {company_name}..."):
@@ -3014,7 +3014,7 @@ def page_next_steps():
                             }
                             deep_dive_cache[company_cache_key] = deep_dive_entry
                             st.success(
-                                f"Company deep dive complete. {COMPANY_DEEP_DIVE_COST} credits used. Credits remaining: {remaining}."
+                                f"Expanded search complete. {COMPANY_DEEP_DIVE_COST} credits used. Credits remaining: {remaining}."
                             )
                     except Exception as exc:
                         deep_dive_entry = {
@@ -3026,9 +3026,9 @@ def page_next_steps():
 
             deep_dive_entry = deep_dive_cache.get(company_cache_key)
             if not deep_dive_entry:
-                st.caption("Run a company deep dive to search for additional public postings from this company.")
+                st.caption("Run an expanded search to pull additional public postings from this company. These results are shown below and are not automatically added to the saved master list.")
             elif deep_dive_entry.get("error"):
-                st.warning(f"Company deep dive could not be completed: {deep_dive_entry['error']}")
+                st.warning(f"Expanded search could not be completed: {deep_dive_entry['error']}")
             else:
                 deep_dive_df = pd.DataFrame(deep_dive_entry.get("records", []))
                 if deep_dive_df.empty:
@@ -3044,21 +3044,21 @@ def page_next_steps():
                         deep_dive_df["relevance_bucket"] == "Broader company context"
                     ].reset_index(drop=True)
 
-                    st.markdown("**Additional Directly Relevant Postings**")
+                    st.markdown("**Expanded Search: Directly Relevant Postings**")
                     if direct_deep_dive_df.empty:
                         st.write("No additional directly relevant postings were found.")
                     else:
                         for _, job_row in direct_deep_dive_df.iterrows():
                             render_company_deep_dive_job_block(job_row)
 
-                    st.markdown("**Additional Adjacent Postings**")
+                    st.markdown("**Expanded Search: Adjacent Postings**")
                     if adjacent_deep_dive_df.empty:
                         st.write("No additional adjacent postings were found.")
                     else:
                         for _, job_row in adjacent_deep_dive_df.iterrows():
                             render_company_deep_dive_job_block(job_row)
 
-                    st.markdown("**Broader Company Hiring Context**")
+                    st.markdown("**Expanded Search: Broader Company Hiring Context**")
                     if broader_deep_dive_df.empty:
                         st.write("No broader company-context postings were found.")
                     else:
