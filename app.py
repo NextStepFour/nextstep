@@ -3209,8 +3209,8 @@ else:
             "Service Profiles",
             "Generate List",
             "Saved Lists",
-            "Next Steps",
             "Potential Expansions",
+            "Next Steps",
         ]
         if is_admin_user(user):
             nav_options.append("Users")
