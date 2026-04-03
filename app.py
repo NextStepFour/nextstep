@@ -3122,31 +3122,6 @@ def page_services():
                 margin: 0.2rem 0 1rem 0;
                 line-height: 1.55;
             }
-            .service-tile {
-                border: 1px solid var(--brand-border);
-                border-radius: 1rem;
-                padding: 1rem 1rem 0.95rem 1rem;
-                background: linear-gradient(180deg, rgba(96, 165, 250, 0.08), rgba(255,255,255,0.02));
-                box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
-                min-height: 260px;
-            }
-            .service-tile-number {
-                display: inline-block;
-                font-size: 0.8rem;
-                font-weight: 800;
-                color: #0f172a;
-                background: var(--brand-blue);
-                border-radius: 999px;
-                padding: 0.22rem 0.55rem;
-                margin-bottom: 0.7rem;
-            }
-            .service-tile-title {
-                font-size: 1.12rem;
-                font-weight: 800;
-                color: #eff6ff;
-                margin-bottom: 0.55rem;
-                line-height: 1.3;
-            }
             .service-category-header {
                 margin: 0.4rem 0 0.9rem 0;
                 padding: 0.9rem 1rem;
@@ -3164,35 +3139,52 @@ def page_services():
                 color: #cbd5e1;
                 line-height: 1.45;
             }
-            .service-tile-category {
-                font-size: 0.76rem;
-                font-weight: 700;
-                text-transform: uppercase;
-                color: #93c5fd;
-                margin-bottom: 0.3rem;
+            .service-chip-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.9rem;
+                margin-bottom: 1rem;
             }
-            .service-tile-copy {
-                color: #dbeafe;
-                line-height: 1.55;
-                margin-bottom: 0.85rem;
-                min-height: 92px;
+            .service-chip-tile {
+                border: 1px solid var(--brand-border);
+                border-radius: 0.95rem;
+                padding: 0.9rem 0.95rem;
+                background: linear-gradient(180deg, rgba(96, 165, 250, 0.08), rgba(255,255,255,0.02));
+                box-shadow: 0 12px 28px rgba(15, 23, 42, 0.10);
+                min-height: 168px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
             }
-            .service-tile-meta {
-                border-top: 1px solid rgba(255,255,255,0.08);
-                padding-top: 0.7rem;
-                margin-top: 0.2rem;
-            }
-            .service-tile-meta-label {
-                font-size: 0.73rem;
-                font-weight: 700;
-                text-transform: uppercase;
-                color: #93c5fd;
-                margin-bottom: 0.18rem;
-            }
-            .service-tile-meta-value {
-                color: #cbd5e1;
+            .service-chip-label {
+                font-size: 1rem;
+                font-weight: 800;
+                color: #eff6ff;
                 line-height: 1.45;
-                margin-bottom: 0.55rem;
+                margin-bottom: 0.7rem;
+                word-break: break-word;
+            }
+            .service-chip-meta {
+                color: #cbd5e1;
+                font-size: 0.86rem;
+                line-height: 1.5;
+            }
+            .service-chip-description {
+                color: #dbeafe;
+                font-size: 0.9rem;
+                line-height: 1.55;
+                margin: 0.7rem 0 0.75rem 0;
+                min-height: 58px;
+            }
+            @media (max-width: 960px) {
+                .service-chip-grid {
+                    grid-template-columns: 1fr 1fr;
+                }
+            }
+            @media (max-width: 640px) {
+                .service-chip-grid {
+                    grid-template-columns: 1fr;
+                }
             }
             </style>
             """,
@@ -3219,29 +3211,26 @@ def page_services():
                 ),
                 unsafe_allow_html=True,
             )
+            st.markdown('<div class="service-chip-grid">', unsafe_allow_html=True)
             tile_columns = st.columns(3)
 
             for idx, (_, row) in enumerate(category_df.iterrows()):
                 service_id = int(row["id"])
                 service_number = int(row["service_number"])
                 description_preview = safe_text(row["service_description"])
-                if len(description_preview) > 220:
-                    description_preview = description_preview[:217].rstrip() + "..."
+                if len(description_preview) > 120:
+                    description_preview = description_preview[:117].rstrip() + "..."
                 created_text = format_short_date(row["created_at"]) or safe_text(row["created_at"], "")
 
                 with tile_columns[idx % 3]:
                     st.markdown(
                         (
-                            '<div class="service-tile">'
-                            f'<div class="service-tile-number">#{service_number}</div>'
-                            f'<div class="service-tile-category">{escape(safe_text(row["service_category"], "General"))}</div>'
-                            f'<div class="service-tile-title">{escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
-                            f'<div class="service-tile-copy">{escape(description_preview or "No description available.")}</div>'
-                            '<div class="service-tile-meta">'
-                            '<div class="service-tile-meta-label">Target Location</div>'
-                            f'<div class="service-tile-meta-value">{escape(safe_text(row["target_location"], "Any U.S. location"))}</div>'
-                            '<div class="service-tile-meta-label">Created</div>'
-                            f'<div class="service-tile-meta-value">{escape(created_text or "Unknown")}</div>'
+                            '<div class="service-chip-tile">'
+                            f'<div class="service-chip-label">#{service_number} | {escape(safe_text(row["service_category"], "General"))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
+                            f'<div class="service-chip-description">{escape(description_preview or "No description available.")}</div>'
+                            '<div class="service-chip-meta">'
+                            f'Target location: {escape(safe_text(row["target_location"], "Any U.S. location"))}<br>'
+                            f'Created: {escape(created_text or "Unknown")}'
                             '</div>'
                             '</div>'
                         ),
@@ -3290,6 +3279,7 @@ def page_services():
                         if cancel_delete:
                             st.session_state.pop("service_delete_id", None)
                             st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
 
