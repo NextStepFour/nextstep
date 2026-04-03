@@ -1677,6 +1677,40 @@ def format_short_date(value):
         return ""
 
 
+def canonicalize_company_name(company_name):
+    text = safe_text(company_name, "Unknown Company").lower()
+    text = re.sub(r"\([^)]*\)", " ", text)
+    text = re.sub(r"[^a-z0-9& ]+", " ", text)
+    text = text.replace("&", " and ")
+    removable_suffixes = {
+        "inc",
+        "incorporated",
+        "llc",
+        "corp",
+        "corporation",
+        "co",
+        "company",
+        "group",
+        "holdings",
+        "ltd",
+        "limited",
+        "na",
+    }
+    parts = [part for part in text.split() if part not in removable_suffixes]
+    return " ".join(parts).strip() or "unknown company"
+
+
+def choose_display_company_name(names):
+    cleaned = [safe_text(name) for name in names if safe_text(name)]
+    if not cleaned:
+        return "Unknown Company"
+    counts = {}
+    for name in cleaned:
+        counts[name] = counts.get(name, 0) + 1
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], len(item[0]), item[0].lower()))
+    return ranked[0][0]
+
+
 def build_master_evidence_data():
     runs = runs_df()
     if runs.empty:
@@ -1730,11 +1764,12 @@ def build_next_steps_company_table(evidence_df):
         return pd.DataFrame()
 
     temp = ensure_evidence_columns(evidence_df).copy()
+    temp["canonical_company_name"] = temp["company_name"].apply(canonicalize_company_name)
     temp["posted_date_parsed"] = pd.to_datetime(temp["posted_date"], errors="coerce")
     rows = []
     now_ts = pd.Timestamp.now().normalize()
 
-    for company, group in temp.groupby("company_name", dropna=False):
+    for canonical_company, group in temp.groupby("canonical_company_name", dropna=False):
         job_rows = group.drop_duplicates(subset=["source_url", "job_title"], keep="first").copy()
         related_job_rows = job_rows[~job_rows["match_type"].isin(["None"])].copy()
         relevant_job_rows = related_job_rows[related_job_rows["match_type"].isin(["Direct", "Peripheral"])].copy()
@@ -1745,6 +1780,7 @@ def build_next_steps_company_table(evidence_df):
             continue
 
         matched_services = flatten_unique(group["matched_service"].tolist())
+        display_company_name = choose_display_company_name(group["company_name"].tolist())
         likely_buyer_department = (
             pd.Series([x for x in group["buyer_department"] if pd.notna(x) and str(x).strip()]).mode().iloc[0]
             if any(pd.notna(group["buyer_department"]))
@@ -1808,7 +1844,7 @@ def build_next_steps_company_table(evidence_df):
 
         rows.append(
             {
-                "buyer_company": safe_text(company, "Unknown Company"),
+                "buyer_company": safe_text(display_company_name, "Unknown Company"),
                 "relevant_posting_count": relevant_posting_count,
                 "related_posting_count": related_posting_count,
                 "most_recent_posted_date": most_recent_posted_text,
@@ -1818,6 +1854,7 @@ def build_next_steps_company_table(evidence_df):
                 "why_highlighted": ". ".join(why_parts) + ".",
                 "suggested_next_step": suggested_next_step,
                 "source_urls": " | ".join(source_urls),
+                "_canonical_company_name": canonical_company,
                 "_recency_rank": recency_rank,
                 "_salary_rank": salary_rank,
             }
@@ -2716,6 +2753,8 @@ def page_next_steps():
     if company_priority_df.empty:
         st.info("No company priority analysis is available from the current saved evidence.")
         return
+    master_evidence_df = ensure_evidence_columns(master_evidence_df.copy())
+    master_evidence_df["canonical_company_name"] = master_evidence_df["company_name"].apply(canonicalize_company_name)
 
     st.markdown(
         """
@@ -2962,8 +3001,9 @@ def page_next_steps():
     st.subheader("Priority Company Reports")
     for _, company_row in top_companies_df.iterrows():
         company_name = company_row["buyer_company"]
+        canonical_company_name = safe_text(company_row.get("_canonical_company_name"))
         company_evidence_df = ensure_evidence_columns(
-            master_evidence_df[master_evidence_df["company_name"] == company_name].copy()
+            master_evidence_df[master_evidence_df["canonical_company_name"] == canonical_company_name].copy()
         )
         company_evidence_df = company_evidence_df.sort_values(
             ["posted_date", "match_score"],
