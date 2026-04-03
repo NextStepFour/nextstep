@@ -2922,7 +2922,7 @@ def page_next_steps():
     st.dataframe(pretty_df(priority_table_df), use_container_width=True, hide_index=True)
 
     st.subheader("Priority Company Reports")
-    for _, company_row in top_companies_df.iterrows():
+    for idx, (_, company_row) in enumerate(top_companies_df.iterrows(), start=1):
         company_name = company_row["buyer_company"]
         canonical_company_name = safe_text(company_row.get("_canonical_company_name"))
         company_evidence_df = ensure_evidence_columns(
@@ -2940,124 +2940,131 @@ def page_next_steps():
             company_evidence_df["match_type"].isin(["Weak"])
         ].drop_duplicates(subset=["source_url", "job_title"], keep="first")
 
-        st.markdown('<div class="nextsteps-company-box">', unsafe_allow_html=True)
-        st.markdown(
-            f'<div class="nextsteps-company-title">Company Name: {escape(company_name)}</div>',
-            unsafe_allow_html=True,
+        expander_label = (
+            f"#{idx} {company_name} | "
+            f"{company_row['relevant_posting_count']} relevant posting"
+            f"{'s' if int(company_row['relevant_posting_count']) != 1 else ''} | "
+            f"{safe_text(company_row['most_recent_posted_date'], 'Unknown date')}"
         )
-        st.markdown(
-            f'<div class="nextsteps-grid">'
-            f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Company Description</div><div class="nextsteps-meta-value">{escape(build_company_business_description(company_name, company_evidence_df))}</div></div>'
-            f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Why It Is Relevant</div><div class="nextsteps-meta-value">{escape(build_company_next_steps_description(company_row, company_evidence_df))}</div></div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            f'<div class="nextsteps-grid">'
-            f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Suggested Next Step</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["suggested_next_step"], "No next step captured."))}</div></div>'
-            f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Likely Buyer Department</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["likely_buyer_department_general"], "Unknown"))}</div></div>'
-            f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Relevant Posting Count</div><div class="nextsteps-meta-value">{escape(str(company_row["relevant_posting_count"]))}</div></div>'
-            f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Most Recent Posting Date</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["most_recent_posted_date"], "Unknown"))}</div></div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+        with st.expander(expander_label, expanded=False):
+            st.markdown('<div class="nextsteps-company-box">', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="nextsteps-company-title">Company Name: {escape(company_name)}</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f'<div class="nextsteps-grid">'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Company Description</div><div class="nextsteps-meta-value">{escape(build_company_business_description(company_name, company_evidence_df))}</div></div>'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Why It Is Relevant</div><div class="nextsteps-meta-value">{escape(build_company_next_steps_description(company_row, company_evidence_df))}</div></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f'<div class="nextsteps-grid">'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Suggested Next Step</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["suggested_next_step"], "No next step captured."))}</div></div>'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Likely Buyer Department</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["likely_buyer_department_general"], "Unknown"))}</div></div>'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Relevant Posting Count</div><div class="nextsteps-meta-value">{escape(str(company_row["relevant_posting_count"]))}</div></div>'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Most Recent Posting Date</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["most_recent_posted_date"], "Unknown"))}</div></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
-        st.markdown('<div class="nextsteps-section-label">Relevant Job Postings</div>', unsafe_allow_html=True)
-        if relevant_jobs_df.empty:
-            st.write("No Direct or Peripheral postings available for this company.")
-        else:
-            for _, job_row in relevant_jobs_df.iterrows():
-                render_next_steps_job_block(job_row)
-
-        st.markdown('<div class="nextsteps-section-label">Other Related Job Postings</div>', unsafe_allow_html=True)
-        if other_jobs_df.empty:
-            st.write("No additional Weak postings available for this company.")
-        else:
-            for _, job_row in other_jobs_df.iterrows():
-                render_next_steps_job_block(job_row)
-
-        st.markdown('<div class="nextsteps-section-label">Company Deep Dive</div>', unsafe_allow_html=True)
-        matched_services_text = safe_text(company_row.get("matched_services"))
-        company_cache_key = f"{safe_text(company_name)}::{matched_services_text}"
-        deep_dive_entry = deep_dive_cache.get(company_cache_key)
-
-        if st.button(
-            f"Expand company hiring view for {company_name} ({COMPANY_DEEP_DIVE_COST} credits)",
-            key=f"expand_company_view_{company_cache_key}",
-            type="primary",
-        ):
-            current_balance = credits()
-            if current_balance < COMPANY_DEEP_DIVE_COST:
-                st.error(f"You need at least {COMPANY_DEEP_DIVE_COST} credits to run a company deep dive.")
+            st.markdown('<div class="nextsteps-section-label">Relevant Job Postings</div>', unsafe_allow_html=True)
+            if relevant_jobs_df.empty:
+                st.write("No Direct or Peripheral postings available for this company.")
             else:
-                try:
-                    with st.spinner(f"Searching for additional public postings from {company_name}..."):
-                        api_client = client()
-                        raw_json, deep_dive_df = search_company_deep_dive(
-                            api_client,
-                            company_name,
-                            matched_services_text,
-                            company_evidence_df,
-                        )
-                        remaining = add_credits(-COMPANY_DEEP_DIVE_COST)
+                for _, job_row in relevant_jobs_df.iterrows():
+                    render_next_steps_job_block(job_row)
+
+            st.markdown('<div class="nextsteps-section-label">Other Related Job Postings</div>', unsafe_allow_html=True)
+            if other_jobs_df.empty:
+                st.write("No additional Weak postings available for this company.")
+            else:
+                for _, job_row in other_jobs_df.iterrows():
+                    render_next_steps_job_block(job_row)
+
+            st.markdown('<div class="nextsteps-section-label">Company Deep Dive</div>', unsafe_allow_html=True)
+            matched_services_text = safe_text(company_row.get("matched_services"))
+            company_cache_key = f"{safe_text(company_name)}::{matched_services_text}"
+            deep_dive_entry = deep_dive_cache.get(company_cache_key)
+
+            if st.button(
+                f"Expand company hiring view for {company_name} ({COMPANY_DEEP_DIVE_COST} credits)",
+                key=f"expand_company_view_{company_cache_key}",
+                type="primary",
+            ):
+                current_balance = credits()
+                if current_balance < COMPANY_DEEP_DIVE_COST:
+                    st.error(f"You need at least {COMPANY_DEEP_DIVE_COST} credits to run a company deep dive.")
+                else:
+                    try:
+                        with st.spinner(f"Searching for additional public postings from {company_name}..."):
+                            api_client = client()
+                            raw_json, deep_dive_df = search_company_deep_dive(
+                                api_client,
+                                company_name,
+                                matched_services_text,
+                                company_evidence_df,
+                            )
+                            remaining = add_credits(-COMPANY_DEEP_DIVE_COST)
+                            deep_dive_entry = {
+                                "raw_json": raw_json,
+                                "records": deep_dive_df.to_dict(orient="records"),
+                                "error": None,
+                            }
+                            deep_dive_cache[company_cache_key] = deep_dive_entry
+                            st.success(
+                                f"Company deep dive complete. {COMPANY_DEEP_DIVE_COST} credits used. Credits remaining: {remaining}."
+                            )
+                    except Exception as exc:
                         deep_dive_entry = {
-                            "raw_json": raw_json,
-                            "records": deep_dive_df.to_dict(orient="records"),
-                            "error": None,
+                            "raw_json": "",
+                            "records": [],
+                            "error": str(exc),
                         }
                         deep_dive_cache[company_cache_key] = deep_dive_entry
-                        st.success(
-                            f"Company deep dive complete. {COMPANY_DEEP_DIVE_COST} credits used. Credits remaining: {remaining}."
-                        )
-                except Exception as exc:
-                    deep_dive_entry = {
-                        "raw_json": "",
-                        "records": [],
-                        "error": str(exc),
-                    }
-                    deep_dive_cache[company_cache_key] = deep_dive_entry
 
-        deep_dive_entry = deep_dive_cache.get(company_cache_key)
-        if not deep_dive_entry:
-            st.caption("Run a company deep dive to search for additional public postings from this company.")
-        elif deep_dive_entry.get("error"):
-            st.warning(f"Company deep dive could not be completed: {deep_dive_entry['error']}")
-        else:
-            deep_dive_df = pd.DataFrame(deep_dive_entry.get("records", []))
-            if deep_dive_df.empty:
-                st.write("No additional public postings were found beyond the ones already captured in this report.")
+            deep_dive_entry = deep_dive_cache.get(company_cache_key)
+            if not deep_dive_entry:
+                st.caption("Run a company deep dive to search for additional public postings from this company.")
+            elif deep_dive_entry.get("error"):
+                st.warning(f"Company deep dive could not be completed: {deep_dive_entry['error']}")
             else:
-                direct_deep_dive_df = deep_dive_df[
-                    deep_dive_df["relevance_bucket"] == "Directly relevant"
-                ].reset_index(drop=True)
-                adjacent_deep_dive_df = deep_dive_df[
-                    deep_dive_df["relevance_bucket"] == "Adjacent"
-                ].reset_index(drop=True)
-                broader_deep_dive_df = deep_dive_df[
-                    deep_dive_df["relevance_bucket"] == "Broader company context"
-                ].reset_index(drop=True)
-
-                st.markdown("**Additional Directly Relevant Postings**")
-                if direct_deep_dive_df.empty:
-                    st.write("No additional directly relevant postings were found.")
+                deep_dive_df = pd.DataFrame(deep_dive_entry.get("records", []))
+                if deep_dive_df.empty:
+                    st.write("No additional public postings were found beyond the ones already captured in this report.")
                 else:
-                    for _, job_row in direct_deep_dive_df.iterrows():
-                        render_company_deep_dive_job_block(job_row)
+                    direct_deep_dive_df = deep_dive_df[
+                        deep_dive_df["relevance_bucket"] == "Directly relevant"
+                    ].reset_index(drop=True)
+                    adjacent_deep_dive_df = deep_dive_df[
+                        deep_dive_df["relevance_bucket"] == "Adjacent"
+                    ].reset_index(drop=True)
+                    broader_deep_dive_df = deep_dive_df[
+                        deep_dive_df["relevance_bucket"] == "Broader company context"
+                    ].reset_index(drop=True)
 
-                st.markdown("**Additional Adjacent Postings**")
-                if adjacent_deep_dive_df.empty:
-                    st.write("No additional adjacent postings were found.")
-                else:
-                    for _, job_row in adjacent_deep_dive_df.iterrows():
-                        render_company_deep_dive_job_block(job_row)
+                    st.markdown("**Additional Directly Relevant Postings**")
+                    if direct_deep_dive_df.empty:
+                        st.write("No additional directly relevant postings were found.")
+                    else:
+                        for _, job_row in direct_deep_dive_df.iterrows():
+                            render_company_deep_dive_job_block(job_row)
 
-                st.markdown("**Broader Company Hiring Context**")
-                if broader_deep_dive_df.empty:
-                    st.write("No broader company-context postings were found.")
-                else:
-                    for _, job_row in broader_deep_dive_df.iterrows():
-                        render_company_deep_dive_job_block(job_row)
-        st.markdown("</div>", unsafe_allow_html=True)
+                    st.markdown("**Additional Adjacent Postings**")
+                    if adjacent_deep_dive_df.empty:
+                        st.write("No additional adjacent postings were found.")
+                    else:
+                        for _, job_row in adjacent_deep_dive_df.iterrows():
+                            render_company_deep_dive_job_block(job_row)
+
+                    st.markdown("**Broader Company Hiring Context**")
+                    if broader_deep_dive_df.empty:
+                        st.write("No broader company-context postings were found.")
+                    else:
+                        for _, job_row in broader_deep_dive_df.iterrows():
+                            render_company_deep_dive_job_block(job_row)
+            st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 
