@@ -3427,7 +3427,7 @@ def page_auth():
             padding: 3.4rem 0 2.2rem 0;
         }
         .landing-hero-copy {
-            max-width: 36rem;
+            max-width: 42rem;
         }
         .landing-band {
             border: 1px solid rgba(255,255,255,0.08);
@@ -3456,20 +3456,21 @@ def page_auth():
             letter-spacing: 0.01em;
         }
         .landing-title {
-            font-size: clamp(3.3rem, 6vw, 5.8rem);
-            line-height: 0.96;
-            font-weight: 850;
+            font-size: clamp(3.5rem, 5.2vw, 4.9rem);
+            line-height: 1.03;
+            font-weight: 560;
             color: #eff6ff;
-            margin-bottom: 1rem;
-            max-width: 8.5ch;
-            letter-spacing: -0.05em;
+            margin-bottom: 1.25rem;
+            max-width: 10.8ch;
+            letter-spacing: -0.04em;
         }
         .landing-subtitle {
             color: #cbd5e1;
-            font-size: 1.18rem;
-            line-height: 1.55;
-            max-width: 26ch;
-            margin-bottom: 1.35rem;
+            font-size: 1.55rem;
+            line-height: 1.42;
+            max-width: 25ch;
+            margin-bottom: 1.9rem;
+            font-weight: 400;
         }
         .landing-proof-grid,
         .landing-work-grid,
@@ -3508,7 +3509,7 @@ def page_auth():
             margin-bottom: 0.8rem;
         }
         .landing-hero-copy form {
-            max-width: 42rem;
+            max-width: 44rem;
         }
         .landing-hero-copy [data-testid="stTextInput"] > div > div {
             background: rgba(255,255,255,0.96);
@@ -4085,10 +4086,10 @@ def page_auth():
                 grid-template-columns: 1fr;
             }
             .landing-title {
-                max-width: 9.5ch;
+                max-width: 11ch;
             }
             .landing-subtitle {
-                max-width: 34ch;
+                max-width: 28ch;
             }
             .landing-mockup-wrap,
             .hero-clean-shell {
@@ -4123,11 +4124,11 @@ def page_auth():
                 padding: 0.78rem 1rem;
             }
             .landing-title {
-                font-size: clamp(2.7rem, 14vw, 4.1rem);
-                max-width: 8.8ch;
+                font-size: clamp(2.8rem, 12vw, 4rem);
+                max-width: 10.2ch;
             }
             .landing-subtitle {
-                font-size: 1.02rem;
+                font-size: 1.18rem;
                 max-width: 24ch;
             }
             .hero-clean-browser {
