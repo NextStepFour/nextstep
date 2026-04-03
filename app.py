@@ -26,6 +26,7 @@ DEFAULT_CREDITS = 50
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "rgordon@heliovolta.com").strip().lower()
 ADMIN_DEMO_CREDITS = int(os.getenv("ADMIN_DEMO_CREDITS", "100"))
 TIME_OPTIONS = ["1 week", "2 weeks", "1 month", "2 months", "3 months"]
+NEXT_STEPS_REFRESH_COST = 10
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8501")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 DISCOVERY_MODEL = os.getenv("OPENAI_DISCOVERY_MODEL", "gpt-5-mini")
@@ -2697,6 +2698,9 @@ def page_users():
 
 def page_next_steps():
     st.title("Next Steps")
+    current = current_user()
+    deep_dive_cache = st.session_state.setdefault("company_deep_dive_cache", {})
+    refresh_key = f"next_steps_last_refresh_user_{current['id']}" if current else "next_steps_last_refresh"
     master_evidence_df = build_master_evidence_data()
     if master_evidence_df.empty:
         st.info("Generate and save at least one list before using Next Steps.")
@@ -2829,10 +2833,34 @@ def page_next_steps():
         unsafe_allow_html=True,
     )
 
+    refresh_left, refresh_right = st.columns([1, 2])
+    with refresh_left:
+        if st.button(f"Refresh analysis ({NEXT_STEPS_REFRESH_COST} credits)", key="next_steps_refresh_button"):
+            current_balance = credits()
+            if current_balance < NEXT_STEPS_REFRESH_COST:
+                st.error(f"You need at least {NEXT_STEPS_REFRESH_COST} credits to refresh the Next Steps analysis.")
+            else:
+                remaining = add_credits(-NEXT_STEPS_REFRESH_COST)
+                deep_dive_cache.clear()
+                st.session_state[refresh_key] = datetime.now().strftime("%m/%d/%y %I:%M %p")
+                st.success(
+                    f"Next Steps analysis refreshed. {NEXT_STEPS_REFRESH_COST} credits used. Credits remaining: {remaining}."
+                )
+                st.rerun()
+    with refresh_right:
+        last_refresh = st.session_state.get(refresh_key)
+        if last_refresh:
+            st.caption(
+                f"Last refreshed: {last_refresh} | Use refresh after new searches to re-rank the top 1 to 5 companies."
+            )
+        else:
+            st.caption(
+                f"Use refresh after new searches to re-rank the top 1 to 5 companies. Each refresh costs {NEXT_STEPS_REFRESH_COST} credits."
+            )
+
     st.markdown('<div class="nextsteps-wrap">', unsafe_allow_html=True)
     top_company_count = min(5, len(company_priority_df))
     top_companies_df = company_priority_df.head(top_company_count).copy()
-    deep_dive_cache = st.session_state.setdefault("company_deep_dive_cache", {})
 
     stat1, stat2, stat3, stat4 = st.columns(4)
     stat1.metric("Companies Reviewed", len(company_priority_df))
