@@ -1725,6 +1725,25 @@ def build_master_evidence_data():
     return master_evidence_df
 
 
+def build_expansion_baseline_evidence(selected_service_names):
+    master_evidence_df = build_master_evidence_data()
+    if master_evidence_df.empty:
+        return pd.DataFrame(columns=EVIDENCE_COLUMNS)
+
+    selected_set = {safe_text(name) for name in selected_service_names if safe_text(name)}
+    if not selected_set:
+        return pd.DataFrame(columns=EVIDENCE_COLUMNS)
+
+    baseline_df = ensure_evidence_columns(master_evidence_df).copy()
+    baseline_df = baseline_df[
+        baseline_df["matched_service"].fillna("").astype(str).isin(selected_set)
+    ].copy()
+    if baseline_df.empty:
+        return pd.DataFrame(columns=EVIDENCE_COLUMNS)
+
+    return baseline_df.sort_values("match_score", ascending=False).reset_index(drop=True)
+
+
 def parse_salary_high_value(salary_text):
     if not salary_text or pd.isna(salary_text):
         return None
@@ -3062,16 +3081,30 @@ def page_potential_expansions():
 
     options = {f"{row['id']} - {row['service_name']}": row for _, row in svc.iterrows()}
     selected = st.multiselect("Select 3 or more services", list(options.keys()))
-    location_filter = st.text_input("Location filter", value="Any U.S. location", key="exp_location")
-    time_window = st.selectbox("Time window", TIME_OPTIONS, index=2, key="exp_time")
-    high_volume = st.checkbox(
-        "High volume mode (broader search, more opportunity signals)",
-        value=True,
-        key="exp_high_volume",
+    st.caption("Default mode uses the saved evidence already collected in your account. This is faster and more tailored to your service set.")
+    run_broader_validation = st.checkbox(
+        "Broaden with fresh market validation",
+        value=False,
+        key="exp_broader_validation",
     )
-    credits_needed = len(selected) * (2 if high_volume else 1) + (1 if selected else 0)
+    location_filter = "Any U.S. location"
+    time_window = "1 month"
+    high_volume = False
+    if run_broader_validation:
+        location_filter = st.text_input("Location filter", value="Any U.S. location", key="exp_location")
+        time_window = st.selectbox("Time window", TIME_OPTIONS, index=2, key="exp_time")
+        high_volume = st.checkbox(
+            "High volume mode (broader search, more opportunity signals)",
+            value=True,
+            key="exp_high_volume",
+        )
+    credits_needed = (len(selected) * (2 if high_volume else 1) if run_broader_validation else 0) + (1 if selected else 0)
     st.caption(
-        f"Credits needed: {credits_needed} | Includes market search plus 1 expansion analysis credit | Credits remaining: {credits()}"
+        (
+            f"Credits needed: {credits_needed} | Includes 1 expansion analysis credit"
+            + (" plus fresh market validation" if run_broader_validation else " using your saved evidence baseline")
+            + f" | Credits remaining: {credits()}"
+        )
     )
 
     if st.button("Generate expansion ideas", type="primary"):
@@ -3084,26 +3117,34 @@ def page_potential_expansions():
         try:
             api_client = client()
             selected_rows = pd.DataFrame([options[label] for label in selected])
-            all_records = []
-            with st.spinner("Searching the market and identifying peripheral service expansions..."):
-                for _, row in selected_rows.iterrows():
-                    _, records = search_service(
-                        api_client,
-                        row,
-                        location_filter,
-                        time_window,
-                        high_volume,
-                    )
-                    all_records.extend(records)
+            selected_service_names = selected_rows["service_name"].tolist()
+            baseline_evidence_df = build_expansion_baseline_evidence(selected_service_names)
+            all_records = baseline_evidence_df.to_dict(orient="records") if not baseline_evidence_df.empty else []
+
+            with st.spinner("Analyzing service gaps from saved market evidence..."):
+                if run_broader_validation:
+                    for _, row in selected_rows.iterrows():
+                        _, records = search_service(
+                            api_client,
+                            row,
+                            location_filter,
+                            time_window,
+                            high_volume,
+                        )
+                        all_records.extend(records)
 
                 evidence_df = pd.DataFrame(all_records)
                 if evidence_df.empty:
-                    st.info(f"No matching U.S. results from the last {time_window} were found.")
+                    if run_broader_validation:
+                        st.info(f"No matching U.S. results from the last {time_window} were found.")
+                    else:
+                        st.info("No saved evidence is available yet for the selected services. Run Generate List first or use broader market validation.")
                     return
 
-                evidence_df = evidence_df[EVIDENCE_COLUMNS].sort_values(
-                    "match_score", ascending=False
-                ).reset_index(drop=True)
+                evidence_df = ensure_evidence_columns(evidence_df).drop_duplicates(
+                    subset=["source_url", "company_name", "job_title", "matched_service"],
+                    keep="first",
+                ).sort_values("match_score", ascending=False).reset_index(drop=True)
                 raw_json, expansion_df = analyze_expansions(
                     api_client,
                     selected_rows,
@@ -3244,9 +3285,9 @@ def page_potential_expansions():
                     {
                         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
                         "services_text": services_text,
-                        "location_filter": location_filter,
-                        "time_window": time_window,
-                        "mode": "High volume" if high_volume else "Focused",
+                        "location_filter": location_filter if run_broader_validation else "Saved evidence baseline",
+                        "time_window": time_window if run_broader_validation else "Saved evidence baseline",
+                        "mode": "High volume" if run_broader_validation and high_volume else ("Focused" if run_broader_validation else "Saved evidence baseline"),
                     },
                 ),
                 file_name="nextstepsignal_potential_expansions.pdf",
