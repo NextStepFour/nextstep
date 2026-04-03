@@ -3421,13 +3421,18 @@ def page_auth():
         .landing-hero {
             display: grid;
             grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
-            gap: 2.4rem;
+            gap: 1.35rem;
             align-items: center;
             min-height: calc(100vh - 10rem);
-            padding: 3.4rem 0 2.2rem 0;
+            padding: 2.4rem 0 2rem 0;
         }
         .landing-hero-copy {
             max-width: 42rem;
+            min-height: 520px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 0.35rem 0 0.35rem 0;
         }
         .landing-band {
             border: 1px solid rgba(255,255,255,0.08);
@@ -3456,20 +3461,20 @@ def page_auth():
             letter-spacing: 0.01em;
         }
         .landing-title {
-            font-size: clamp(3.5rem, 5.2vw, 4.9rem);
+            font-size: clamp(3.15rem, 4.8vw, 4.45rem);
             line-height: 1.03;
             font-weight: 560;
             color: #eff6ff;
             margin-bottom: 1.25rem;
-            max-width: 10.8ch;
+            max-width: 11.6ch;
             letter-spacing: -0.04em;
         }
         .landing-subtitle {
             color: #cbd5e1;
-            font-size: 1.55rem;
+            font-size: 1.4rem;
             line-height: 1.42;
-            max-width: 25ch;
-            margin-bottom: 1.9rem;
+            max-width: 27ch;
+            margin-bottom: 1.7rem;
             font-weight: 400;
         }
         .landing-proof-grid,
@@ -3612,10 +3617,13 @@ def page_auth():
             min-height: 520px;
             padding: 0;
             overflow: hidden;
+            display: flex;
+            align-items: center;
         }
         .hero-clean-shell {
             position: relative;
             min-height: 520px;
+            width: 100%;
             border-radius: 2rem;
             background:
                 radial-gradient(circle at 24% 18%, rgba(125, 211, 252, 0.28) 0%, rgba(125, 211, 252, 0.00) 34%),
@@ -4075,6 +4083,10 @@ def page_auth():
                 min-height: auto;
                 gap: 1.5rem;
                 padding-top: 2.1rem;
+            }
+            .landing-hero-copy {
+                min-height: auto;
+                padding: 0;
             }
             .landing-proof-grid,
             .landing-work-grid,
