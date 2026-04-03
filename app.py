@@ -1002,7 +1002,7 @@ def save_service(category, name, description, location_filter, user_id=None):
         )
 
 
-def update_service_title(service_id, new_title, user_id=None):
+def update_service_profile(service_id, category, name, description, location_filter, user_id=None):
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user:
         raise ValueError("Please sign in to update service profiles.")
@@ -1010,10 +1010,17 @@ def update_service_title(service_id, new_title, user_id=None):
         db.execute(
             """
             UPDATE services
-            SET service_name = ?
+            SET service_category = ?, service_name = ?, service_description = ?, target_location = ?
             WHERE id = ? AND user_id = ?
             """,
-            (new_title.strip(), int(service_id), user["id"]),
+            (
+                category.strip() or "General",
+                name.strip(),
+                description.strip(),
+                location_filter.strip(),
+                int(service_id),
+                user["id"],
+            ),
         )
 
 
@@ -3238,7 +3245,7 @@ def page_services():
                     )
 
                     action_col1, action_col2 = st.columns(2)
-                    if action_col1.button("Edit Title", key=f"edit_service_{service_id}", use_container_width=True):
+                    if action_col1.button("Edit Service", key=f"edit_service_{service_id}", use_container_width=True):
                         st.session_state["service_rename_id"] = service_id
                         st.session_state.pop("service_delete_id", None)
                         st.rerun()
@@ -3249,17 +3256,43 @@ def page_services():
 
                     if rename_id == service_id:
                         with st.form(f"rename_service_form_{service_id}"):
-                            new_title = st.text_input("Service", value=safe_text(row["service_name"]), key=f"rename_title_{service_id}")
+                            new_category = st.text_input(
+                                "Service Category",
+                                value=safe_text(row["service_category"], "General"),
+                                key=f"rename_category_{service_id}",
+                            )
+                            new_title = st.text_input(
+                                "Service",
+                                value=safe_text(row["service_name"]),
+                                key=f"rename_title_{service_id}",
+                            )
+                            new_description = st.text_area(
+                                "Service Description",
+                                value=safe_text(row["service_description"]),
+                                height=160,
+                                key=f"rename_description_{service_id}",
+                            )
+                            new_location = st.text_input(
+                                "Target Location",
+                                value=safe_text(row["target_location"], "Any U.S. location"),
+                                key=f"rename_location_{service_id}",
+                            )
                             form_col1, form_col2 = st.columns(2)
                             save_rename = form_col1.form_submit_button("Save")
                             cancel_rename = form_col2.form_submit_button("Cancel")
                         if save_rename:
-                            if not new_title.strip():
-                                st.error("Please enter a title.")
+                            if not new_category.strip() or not new_title.strip() or not new_description.strip():
+                                st.error("Please enter a service category, service, and service description.")
                             else:
-                                update_service_title(service_id, new_title)
+                                update_service_profile(
+                                    service_id,
+                                    new_category,
+                                    new_title,
+                                    new_description,
+                                    new_location,
+                                )
                                 st.session_state.pop("service_rename_id", None)
-                                st.success("Service title updated.")
+                                st.success("Service profile updated.")
                                 st.rerun()
                         if cancel_rename:
                             st.session_state.pop("service_rename_id", None)
