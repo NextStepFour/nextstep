@@ -3173,12 +3173,13 @@ def render_landing_signup_capture():
         else:
             st.session_state["landing_signup_email"] = landing_email.strip()
             st.session_state["landing_auth_mode"] = "Create Account"
-            st.session_state["landing_show_auth"] = True
+            st.query_params["auth"] = "signup"
             st.rerun()
 
 
 def page_auth():
     reset_token = st.query_params.get("reset_token")
+    auth_view = safe_text(st.query_params.get("auth")).lower()
     st.markdown(
         """
         <style>
@@ -3188,12 +3189,31 @@ def page_auth():
             justify-content: space-between;
             gap: 1rem;
             margin-bottom: 1rem;
+            position: sticky;
+            top: 0.65rem;
+            z-index: 50;
+            padding: 0.7rem 0.9rem;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 1rem;
+            background: rgba(15, 23, 42, 0.84);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 12px 34px rgba(15, 23, 42, 0.20);
         }
         .landing-brand {
             font-size: 1.2rem;
             font-weight: 850;
             color: #eff6ff;
             letter-spacing: -0.01em;
+        }
+        .landing-nav-right {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }
+        .landing-nav-link {
+            color: #dbeafe !important;
+            text-decoration: none !important;
+            font-weight: 650;
         }
         .landing-topbar-cta {
             display: inline-flex;
@@ -3421,6 +3441,22 @@ def page_auth():
             line-height: 1.6;
             margin-bottom: 0.85rem;
         }
+        .auth-page-shell {
+            max-width: 1120px;
+            margin: 0 auto;
+        }
+        .auth-page-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .auth-page-back {
+            color: #dbeafe !important;
+            text-decoration: none !important;
+            font-weight: 650;
+        }
         @media (max-width: 1100px) {
             .landing-hero {
                 grid-template-columns: 1fr;
@@ -3447,12 +3483,43 @@ def page_auth():
             st.markdown("</div>", unsafe_allow_html=True)
         with right:
             st.markdown(auth_space_scene_html(), unsafe_allow_html=True)
+    elif auth_view in {"signup", "signin"}:
+        st.session_state["landing_auth_mode"] = "Create Account" if auth_view == "signup" else "Sign In"
+        st.markdown('<div class="auth-page-shell">', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="auth-page-topbar">
+                <div class="landing-brand">{APP_NAME}</div>
+                <a class="auth-page-back" href="?">Back to site</a>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        left, right = st.columns([0.98, 1.12], gap="large")
+        with left:
+            page_title = "Create your account" if auth_view == "signup" else "Sign in to your account"
+            page_copy = (
+                "Use your email to set up your account and start building a cleaner market view."
+                if auth_view == "signup"
+                else "Sign in to continue working with your saved services, lists, and market analysis."
+            )
+            st.markdown(f'<div class="landing-title" style="font-size:2.8rem; max-width:11ch;">{page_title}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="landing-subtitle">{page_copy}</div>', unsafe_allow_html=True)
+            st.markdown('<div class="landing-auth-shell">', unsafe_allow_html=True)
+            render_auth_account_panel()
+            st.markdown("</div>", unsafe_allow_html=True)
+        with right:
+            st.markdown(auth_space_scene_html(), unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.markdown(
             f"""
             <div class="landing-topbar">
                 <div class="landing-brand">{APP_NAME}</div>
-                <a class="landing-topbar-cta" href="#auth-panel">Start Free</a>
+                <div class="landing-nav-right">
+                    <a class="landing-nav-link" href="?auth=signin">Sign in</a>
+                    <a class="landing-topbar-cta" href="?auth=signup">Start Free</a>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -3473,7 +3540,6 @@ def page_auth():
             st.markdown(
                 """
                 <div class="landing-anchor-row">
-                    <a class="landing-anchor-button primary" href="#auth-panel">Start Free</a>
                     <a class="landing-anchor-button secondary" href="#how-it-works">See How It Works</a>
                 </div>
                 """,
@@ -3481,17 +3547,6 @@ def page_auth():
             )
         with hero_right:
             st.markdown(auth_space_scene_html(), unsafe_allow_html=True)
-
-        st.markdown(
-            """
-            <div class="landing-auth-shell" id="auth-panel">
-                <div class="landing-auth-title">Create your account or sign in</div>
-                <div class="landing-auth-copy">Use the quick signup above or complete your account setup here.</div>
-            """,
-            unsafe_allow_html=True,
-        )
-        render_auth_account_panel()
-        st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown(
             """
