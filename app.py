@@ -2552,40 +2552,172 @@ def page_billing(user):
 
 def page_dashboard():
     st.title(APP_NAME)
-    st.subheader(APP_TAGLINE)
+    st.subheader("Simple market view and next actions")
+    user = current_user()
     svc = services_df()
     runs = runs_df()
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Credits Remaining", credits())
-    c2.metric("Saved Services", len(svc))
-    c3.metric("Saved Lists", len(runs))
-    st.write("Save service profiles, generate prospect lists with credits, and keep those lists for later review and export.")
-    if is_admin_user(current_user()):
+    master_evidence_df = build_master_evidence_data()
+    next_steps_df = build_next_steps_company_table(master_evidence_df) if not master_evidence_df.empty else pd.DataFrame()
+
+    top_buyer_company = safe_text(next_steps_df.iloc[0]["buyer_company"], "None yet") if not next_steps_df.empty else "None yet"
+    multiple_posting_signals = int((next_steps_df["relevant_posting_count"] > 1).sum()) if not next_steps_df.empty else 0
+    freshest_signal = "None yet"
+    if not master_evidence_df.empty:
+        freshest_dates = pd.to_datetime(master_evidence_df["posted_date"], errors="coerce").dropna()
+        if not freshest_dates.empty:
+            freshest_signal = freshest_dates.max().strftime("%m/%d/%y")
+    most_recent_list = (
+        format_short_date(runs.iloc[0]["created_at"])
+        if not runs.empty
+        else "None yet"
+    )
+
+    st.markdown(
+        """
+        <style>
+        .dashboard-wrap {
+            max-width: 1120px;
+            margin: 0 auto;
+        }
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.85rem;
+            margin-bottom: 1rem;
+        }
+        .dashboard-card {
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 0.95rem;
+            background: rgba(15, 23, 42, 0.42);
+            padding: 0.95rem 1rem;
+        }
+        .dashboard-label {
+            font-size: 0.76rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #93c5fd;
+            margin-bottom: 0.35rem;
+        }
+        .dashboard-value {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: #eff6ff;
+            line-height: 1.15;
+        }
+        .dashboard-subvalue {
+            margin-top: 0.3rem;
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            line-height: 1.45;
+        }
+        .dashboard-action-shell {
+            border: 1px solid var(--brand-border);
+            border-radius: 1rem;
+            background: linear-gradient(180deg, rgba(96, 165, 250, 0.08), rgba(255,255,255,0.02));
+            padding: 1rem 1rem 0.2rem 1rem;
+            margin-bottom: 1rem;
+        }
+        .dashboard-action-title {
+            font-size: 1rem;
+            font-weight: 750;
+            color: #eff6ff;
+            margin-bottom: 0.25rem;
+        }
+        .dashboard-action-copy {
+            color: #cbd5e1;
+            margin-bottom: 0.85rem;
+            line-height: 1.5;
+        }
+        @media (max-width: 980px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        @media (max-width: 640px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="dashboard-wrap">', unsafe_allow_html=True)
+    st.markdown(
+        (
+            '<div class="dashboard-grid">'
+            f'<div class="dashboard-card"><div class="dashboard-label">Credits Remaining</div><div class="dashboard-value">{credits()}</div><div class="dashboard-subvalue">Available for list generation, refreshes, and expansions.</div></div>'
+            f'<div class="dashboard-card"><div class="dashboard-label">Saved Services</div><div class="dashboard-value">{len(svc)}</div><div class="dashboard-subvalue">Service profiles currently saved in your account.</div></div>'
+            f'<div class="dashboard-card"><div class="dashboard-label">Saved Lists</div><div class="dashboard-value">{len(runs)}</div><div class="dashboard-subvalue">Buyer-company lists already generated and stored.</div></div>'
+            f'<div class="dashboard-card"><div class="dashboard-label">Current Plan</div><div class="dashboard-value">{escape(safe_text(user.get("plan_name"), "None"))}</div><div class="dashboard-subvalue">{escape(safe_text(user.get("subscription_status"), "inactive").title())}</div></div>'
+            '</div>'
+        ),
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        (
+            '<div class="dashboard-grid">'
+            f'<div class="dashboard-card"><div class="dashboard-label">Top Buyer Company</div><div class="dashboard-value">{escape(top_buyer_company)}</div><div class="dashboard-subvalue">Highest current signal based on saved evidence.</div></div>'
+            f'<div class="dashboard-card"><div class="dashboard-label">Multiple Posting Signals</div><div class="dashboard-value">{multiple_posting_signals}</div><div class="dashboard-subvalue">Buyer companies with more than one relevant posting.</div></div>'
+            f'<div class="dashboard-card"><div class="dashboard-label">Freshest Signal</div><div class="dashboard-value">{escape(freshest_signal)}</div><div class="dashboard-subvalue">Most recent posting date captured in saved evidence.</div></div>'
+            f'<div class="dashboard-card"><div class="dashboard-label">Most Recent List</div><div class="dashboard-value">{escape(most_recent_list)}</div><div class="dashboard-subvalue">Latest saved list generation date.</div></div>'
+            '</div>'
+        ),
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <div class="dashboard-action-shell">
+            <div class="dashboard-action-title">Open the next part of the workflow</div>
+            <div class="dashboard-action-copy">Generate a new list, review the strongest current buyer-company signals, or look for adjacent service gaps.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    a1, a2, a3 = st.columns(3)
+    if a1.button("Generate New List", type="primary", use_container_width=True):
+        st.session_state["nav_page"] = "Generate List"
+        st.rerun()
+    if a2.button("Review Next Steps", type="primary", use_container_width=True):
+        st.session_state["nav_page"] = "Next Steps"
+        st.rerun()
+    if a3.button("Review Potential Expansions", type="primary", use_container_width=True):
+        st.session_state["nav_page"] = "Potential Expansions"
+        st.rerun()
+
+    if is_admin_user(user):
         with st.expander("Admin credit controls"):
             amount = st.number_input("Add demo credits", min_value=1, max_value=500, value=10, step=1)
             if st.button("Add credits"):
                 st.success(f"Credits updated to {add_credits(int(amount))}.")
                 st.rerun()
+
+    st.markdown("**Recent Activity**")
     if runs.empty:
         st.info("No saved lists yet.")
     else:
-        st.dataframe(
-            pretty_df(
-                runs[
-                    [
-                        "run_name",
-                        "services_text",
-                        "location_filter",
-                        "time_window",
-                        "mode",
-                        "estimated_search_time",
-                        "credits_used",
-                        "created_at",
-                    ]
-                ]
-            ),
-            use_container_width=True,
-        )
+        activity_df = runs[
+            [
+                "created_at",
+                "services_text",
+                "location_filter",
+                "time_window",
+                "credits_used",
+            ]
+        ].copy().head(5)
+        activity_df["created_at"] = activity_df["created_at"].apply(format_short_date)
+        activity_df.columns = [
+            "Date",
+            "Services",
+            "Location",
+            "Time Window",
+            "Credits Used",
+        ]
+        st.dataframe(activity_df, use_container_width=True, hide_index=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def page_services():
@@ -3504,13 +3636,17 @@ else:
         ]
         if is_admin_user(user):
             nav_options.append("Users")
+        if st.session_state.get("nav_page") not in nav_options:
+            st.session_state["nav_page"] = "Dashboard"
         page = st.radio(
             "Navigate",
             nav_options,
             label_visibility="collapsed",
+            key="nav_page",
         )
         if st.button("Sign Out", type="secondary"):
             set_current_user(None)
+            st.session_state.pop("nav_page", None)
             st.rerun()
 
     if page == "Plans & Billing":
