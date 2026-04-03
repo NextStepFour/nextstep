@@ -3040,32 +3040,106 @@ def clear_reset_query_param():
         pass
 
 
+def render_auth_reset_panel(reset_token):
+    reset_record = get_password_reset_record(reset_token)
+    if not reset_record:
+        st.error("This password reset link is invalid or has expired.")
+        if st.button("Back to Sign In", key="back_from_invalid_reset"):
+            clear_reset_query_param()
+            st.rerun()
+        return
+
+    st.markdown("**Reset Password**")
+    st.caption(f"Reset password for {safe_text(reset_record.get('email'))}")
+    with st.form("reset_password_form"):
+        new_password = st.text_input("New Password", type="password", key="reset_password_1")
+        confirm_password = st.text_input("Confirm New Password", type="password", key="reset_password_2")
+        submitted = st.form_submit_button("Save New Password")
+    if submitted:
+        if not new_password.strip() or not confirm_password.strip():
+            st.error("Please complete both password fields.")
+        elif new_password != confirm_password:
+            st.error("The passwords do not match.")
+        elif len(new_password) < 8:
+            st.error("Use a password with at least 8 characters.")
+        else:
+            update_user_password(reset_record["user_id"], new_password)
+            mark_password_reset_used(reset_record["id"])
+            clear_reset_query_param()
+            st.success("Password updated. You can sign in now.")
+            st.rerun()
+    if st.button("Back to Sign In", key="back_from_reset"):
+        clear_reset_query_param()
+        st.rerun()
+
+
+def render_auth_account_panel():
+    auth_mode = st.session_state.get("landing_auth_mode", "Create Account")
+    auth_tabs = st.tabs(["Sign In", "Create Account"])
+
+    with auth_tabs[0]:
+        with st.form("login_form"):
+            email = st.text_input("Email", key="login_email")
+            password = st.text_input("Password", type="password", key="login_password")
+            submitted = st.form_submit_button("Sign In")
+        if submitted:
+            user = get_user_by_email(email)
+            if not user or not verify_password(password, user["password_hash"]):
+                st.error("Invalid email or password.")
+            else:
+                if user.get("email", "").strip().lower() == ADMIN_EMAIL:
+                    update_user_fields(
+                        user["id"],
+                        is_admin=1,
+                        credit_balance=max(int(user.get("credit_balance") or 0), ADMIN_DEMO_CREDITS),
+                    )
+                    user = get_user_by_id(user["id"])
+                user = sync_user_billing(user)
+                set_current_user(user)
+                st.success("Signed in.")
+                st.rerun()
+        with st.expander("Forgot password?"):
+            with st.form("forgot_password_form"):
+                reset_email = st.text_input("Email", key="forgot_password_email")
+                reset_submit = st.form_submit_button("Send reset link")
+            if reset_submit:
+                try:
+                    send_password_reset_email(reset_email)
+                    st.success("If that email is registered, a password reset link has been sent.")
+                except ValueError as exc:
+                    st.error(str(exc))
+                except Exception:
+                    st.error("Password reset email could not be sent right now.")
+
+    with auth_tabs[1]:
+        with st.form("signup_form"):
+            full_name = st.text_input("Full name", key="signup_name")
+            email = st.text_input("Email", key="signup_email")
+            password = st.text_input("Password", type="password", key="signup_password")
+            submitted = st.form_submit_button("Create Account")
+        if submitted:
+            if not full_name.strip() or not email.strip() or not password.strip():
+                st.error("Please complete all fields.")
+            elif get_user_by_email(email):
+                st.error("An account with that email already exists.")
+            else:
+                try:
+                    user = create_user(full_name, email, password)
+                    set_current_user(user)
+                    st.success("Account created. You can use starter demo credits or subscribe below.")
+                    st.rerun()
+                except ValueError as exc:
+                    st.error(str(exc))
+
+
 def page_auth():
     reset_token = st.query_params.get("reset_token")
     st.markdown(
         """
         <style>
-        .auth-brand {
-            font-size: 2.9rem;
-            line-height: 1;
-            font-weight: 800;
-            color: #eff6ff;
-            margin-bottom: 0.65rem;
-        }
-        .auth-copy {
-            color: #cbd5e1;
-            margin-bottom: 1rem;
-            font-size: 1rem;
-        }
-        .auth-left {
-            padding-right: 1.2rem;
-        }
-        .auth-right {
-            min-height: 100%;
-        }
         .auth-hero {
             position: relative;
-            min-height: 760px;
+            min-height: 620px;
             width: 100%;
             overflow: hidden;
             border-radius: 1.35rem;
@@ -3098,12 +3172,8 @@ def page_auth():
             display: block;
         }
         @media (max-width: 1200px) {
-            .auth-left {
-                padding-right: 0;
-            }
             .auth-hero {
-                min-height: 520px;
-                margin-top: 1rem;
+                min-height: 420px;
             }
             .space-pixel-scene {
                 grid-template-columns: repeat(28, 10px);
@@ -3114,113 +3184,271 @@ def page_auth():
                 height: 10px;
             }
         }
+        .landing-wrap {
+            max-width: 1140px;
+            margin: 0 auto;
+        }
+        .landing-hero {
+            display: grid;
+            grid-template-columns: 1.05fr 1fr;
+            gap: 1.4rem;
+            align-items: center;
+            margin-bottom: 1.3rem;
+        }
+        .landing-kicker {
+            display: inline-block;
+            margin-bottom: 0.85rem;
+            padding: 0.42rem 0.7rem;
+            border-radius: 999px;
+            background: rgba(96, 165, 250, 0.14);
+            color: #dbeafe;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+        .landing-title {
+            font-size: clamp(2.7rem, 5vw, 4.5rem);
+            line-height: 0.98;
+            font-weight: 850;
+            color: #eff6ff;
+            margin-bottom: 0.9rem;
+            max-width: 12ch;
+        }
+        .landing-subtitle {
+            color: #cbd5e1;
+            font-size: 1.08rem;
+            line-height: 1.7;
+            max-width: 58ch;
+            margin-bottom: 1rem;
+        }
+        .landing-support {
+            color: #93c5fd;
+            font-size: 0.95rem;
+            line-height: 1.55;
+            margin-bottom: 1rem;
+        }
+        .landing-proof-grid,
+        .landing-work-grid,
+        .landing-feature-grid,
+        .landing-outcome-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.9rem;
+            margin-bottom: 1.1rem;
+        }
+        .landing-card {
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 1rem;
+            background: rgba(15, 23, 42, 0.40);
+            padding: 1rem 1rem 0.95rem 1rem;
+            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.10);
+        }
+        .landing-card-title {
+            color: #eff6ff;
+            font-size: 1.02rem;
+            font-weight: 800;
+            margin-bottom: 0.35rem;
+        }
+        .landing-card-copy {
+            color: #cbd5e1;
+            line-height: 1.6;
+        }
+        .landing-section {
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+        }
+        .landing-section-title {
+            font-size: 1.65rem;
+            font-weight: 850;
+            color: #eff6ff;
+            margin-bottom: 0.25rem;
+        }
+        .landing-section-copy {
+            color: #cbd5e1;
+            line-height: 1.65;
+            margin-bottom: 0.9rem;
+            max-width: 70ch;
+        }
+        .landing-product {
+            border: 1px solid var(--brand-border);
+            border-radius: 1.15rem;
+            background: linear-gradient(180deg, rgba(96, 165, 250, 0.10), rgba(255,255,255,0.02));
+            padding: 1.15rem 1.1rem 1rem 1.1rem;
+            margin-bottom: 1rem;
+        }
+        .landing-product-title {
+            font-size: 1.2rem;
+            font-weight: 850;
+            color: #eff6ff;
+            margin-bottom: 0.35rem;
+        }
+        .landing-product-copy {
+            color: #dbeafe;
+            line-height: 1.6;
+            margin-bottom: 0.75rem;
+            max-width: 70ch;
+        }
+        .landing-product-bullets {
+            color: #cbd5e1;
+            line-height: 1.7;
+        }
+        .landing-auth-shell {
+            border: 1px solid var(--brand-border);
+            border-radius: 1.15rem;
+            background: linear-gradient(180deg, rgba(96, 165, 250, 0.10), rgba(255,255,255,0.02));
+            padding: 1.15rem 1.1rem 1rem 1.1rem;
+            margin-top: 1.1rem;
+            scroll-margin-top: 1rem;
+        }
+        .landing-auth-title {
+            font-size: 1.45rem;
+            font-weight: 850;
+            color: #eff6ff;
+            margin-bottom: 0.25rem;
+        }
+        .landing-auth-copy {
+            color: #cbd5e1;
+            line-height: 1.6;
+            margin-bottom: 0.85rem;
+        }
+        @media (max-width: 1100px) {
+            .landing-hero {
+                grid-template-columns: 1fr;
+            }
+            .landing-proof-grid,
+            .landing-work-grid,
+            .landing-feature-grid,
+            .landing-outcome-grid {
+                grid-template-columns: 1fr;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
+    st.markdown('<div class="landing-wrap">', unsafe_allow_html=True)
+    if reset_token:
+        left, right = st.columns([1.02, 1.18], gap="large")
+        with left:
+            st.markdown(f'<div class="landing-title" style="font-size:2.8rem; max-width:10ch;">Reset your password</div>', unsafe_allow_html=True)
+            st.markdown('<div class="landing-subtitle">Use the secure link from your email to set a new password and get back into your account.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="landing-auth-shell">', unsafe_allow_html=True)
+            render_auth_reset_panel(reset_token)
+            st.markdown("</div>", unsafe_allow_html=True)
+        with right:
+            st.markdown(auth_space_scene_html(), unsafe_allow_html=True)
+    else:
+        hero_left, hero_right = st.columns([1.05, 1.0], gap="large")
+        with hero_left:
+            st.markdown('<div class="landing-kicker">Market intelligence for service growth</div>', unsafe_allow_html=True)
+            st.markdown('<div class="landing-title">Turn public market signals into your next client opportunities</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="landing-subtitle">NextStepSignal helps service companies find buyer demand, organize hiring signals, and identify where to focus next.</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                '<div class="landing-support">Built for service providers in solar, energy storage, EV charging, QA/QC, field services, and engineering support.</div>',
+                unsafe_allow_html=True,
+            )
+            cta1, cta2 = st.columns([1, 1])
+            if cta1.button("Start Free", type="primary", use_container_width=True):
+                st.session_state["landing_auth_mode"] = "Create Account"
+            if cta2.button("See How It Works", use_container_width=True):
+                st.session_state["landing_auth_mode"] = "Sign In"
+        with hero_right:
+            st.markdown(auth_space_scene_html(), unsafe_allow_html=True)
 
-    left, right = st.columns([1.02, 1.18], gap="large")
-
-    with left:
-        st.markdown('<div class="auth-left">', unsafe_allow_html=True)
-        st.markdown(f'<div class="auth-brand">{APP_NAME}</div>', unsafe_allow_html=True)
-        st.subheader(APP_TAGLINE)
         st.markdown(
-            '<div class="auth-copy">Create an account to save services, generate prospect lists, and manage subscription access.</div>',
+            """
+            <div class="landing-proof-grid">
+                <div class="landing-card">
+                    <div class="landing-card-title">Find buyer companies</div>
+                    <div class="landing-card-copy">Capture public hiring and market signals tied to your service scope.</div>
+                </div>
+                <div class="landing-card">
+                    <div class="landing-card-title">Prioritize what matters</div>
+                    <div class="landing-card-copy">See which companies show the strongest and most repeated demand signals.</div>
+                </div>
+                <div class="landing-card">
+                    <div class="landing-card-title">Spot service gaps</div>
+                    <div class="landing-card-copy">Identify adjacent scopes the market is already asking for but your current offering may miss.</div>
+                </div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
-        if reset_token:
-            reset_record = get_password_reset_record(reset_token)
-            if not reset_record:
-                st.error("This password reset link is invalid or has expired.")
-                if st.button("Back to Sign In", key="back_from_invalid_reset"):
-                    clear_reset_query_param()
-                    st.rerun()
-            else:
-                st.markdown("**Reset Password**")
-                st.caption(f"Reset password for {safe_text(reset_record.get('email'))}")
-                with st.form("reset_password_form"):
-                    new_password = st.text_input("New Password", type="password", key="reset_password_1")
-                    confirm_password = st.text_input("Confirm New Password", type="password", key="reset_password_2")
-                    submitted = st.form_submit_button("Save New Password")
-                if submitted:
-                    if not new_password.strip() or not confirm_password.strip():
-                        st.error("Please complete both password fields.")
-                    elif new_password != confirm_password:
-                        st.error("The passwords do not match.")
-                    elif len(new_password) < 8:
-                        st.error("Use a password with at least 8 characters.")
-                    else:
-                        update_user_password(reset_record["user_id"], new_password)
-                        mark_password_reset_used(reset_record["id"])
-                        clear_reset_query_param()
-                        st.success("Password updated. You can sign in now.")
-                        st.rerun()
-                if st.button("Back to Sign In", key="back_from_reset"):
-                    clear_reset_query_param()
-                    st.rerun()
-        else:
-            login_tab, signup_tab = st.tabs(["Sign In", "Create Account"])
 
-            with login_tab:
-                with st.form("login_form"):
-                    email = st.text_input("Email", key="login_email")
-                    password = st.text_input("Password", type="password", key="login_password")
-                    submitted = st.form_submit_button("Sign In")
-                if submitted:
-                    user = get_user_by_email(email)
-                    if not user or not verify_password(password, user["password_hash"]):
-                        st.error("Invalid email or password.")
-                    else:
-                        if user.get("email", "").strip().lower() == ADMIN_EMAIL:
-                            update_user_fields(
-                                user["id"],
-                                is_admin=1,
-                                credit_balance=max(int(user.get("credit_balance") or 0), ADMIN_DEMO_CREDITS),
-                            )
-                            user = get_user_by_id(user["id"])
-                        user = sync_user_billing(user)
-                        set_current_user(user)
-                        st.success("Signed in.")
-                        st.rerun()
-                with st.expander("Forgot password?"):
-                    with st.form("forgot_password_form"):
-                        reset_email = st.text_input("Email", key="forgot_password_email")
-                        reset_submit = st.form_submit_button("Send reset link")
-                    if reset_submit:
-                        try:
-                            send_password_reset_email(reset_email)
-                            st.success("If that email is registered, a password reset link has been sent.")
-                        except ValueError as exc:
-                            st.error(str(exc))
-                        except Exception:
-                            st.error("Password reset email could not be sent right now.")
+        st.markdown(
+            """
+            <div class="landing-section">
+                <div class="landing-section-title">A simpler way to read the market</div>
+                <div class="landing-section-copy">Move from scattered public postings and weak manual research to a clearer, service-driven market view.</div>
+                <div class="landing-work-grid">
+                    <div class="landing-card">
+                        <div class="landing-card-title">1. Add your service profiles</div>
+                        <div class="landing-card-copy">Organize your services by category and define the exact scope you want tracked.</div>
+                    </div>
+                    <div class="landing-card">
+                        <div class="landing-card-title">2. Generate buyer-company lists</div>
+                        <div class="landing-card-copy">Find companies with public hiring signals related to your service scope.</div>
+                    </div>
+                    <div class="landing-card">
+                        <div class="landing-card-title">3. Act on the strongest signals</div>
+                        <div class="landing-card-copy">Use Next Steps and Potential Expansions to prioritize outreach and identify adjacent service opportunities.</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-            with signup_tab:
-                with st.form("signup_form"):
-                    full_name = st.text_input("Full name", key="signup_name")
-                    email = st.text_input("Email", key="signup_email")
-                    password = st.text_input("Password", type="password", key="signup_password")
-                    submitted = st.form_submit_button("Create Account")
-                if submitted:
-                    if not full_name.strip() or not email.strip() or not password.strip():
-                        st.error("Please complete all fields.")
-                    elif get_user_by_email(email):
-                        st.error("An account with that email already exists.")
-                    else:
-                        try:
-                            user = create_user(full_name, email, password)
-                            set_current_user(user)
-                            st.success("Account created. You can use starter demo credits or subscribe below.")
-                            st.rerun()
-                        except ValueError as exc:
-                            st.error(str(exc))
+        st.markdown(
+            """
+            <div class="landing-product">
+                <div class="landing-product-title">Generate List</div>
+                <div class="landing-product-copy">Build a buyer-company list from public job postings and related market signals. Each result is tied back to your saved service scope so the output stays relevant.</div>
+                <div class="landing-product-bullets">• Buyer company list with matched services<br>• Public posting evidence and salary when disclosed<br>• Clean CSV and PDF export</div>
+            </div>
+            <div class="landing-product">
+                <div class="landing-product-title">Next Steps</div>
+                <div class="landing-product-copy">Rank the strongest companies based on repeated hiring signals, recency, and supporting evidence. Review the top companies in a clean, readable format designed for action.</div>
+                <div class="landing-product-bullets">• Top 1 to 5 companies highlighted<br>• Company-specific job patterns<br>• Expanded search for deeper company context</div>
+            </div>
+            <div class="landing-product">
+                <div class="landing-product-title">Potential Expansions</div>
+                <div class="landing-product-copy">See where the market is requesting work adjacent to your current services. Use repeated public signals to identify missing scopes worth evaluating.</div>
+                <div class="landing-product-bullets">• Service-gap analysis from saved evidence<br>• Companies showing interest in adjacent scopes<br>• Pattern-by-company expansion reporting</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            """
+            <div class="landing-section">
+                <div class="landing-section-title">What changes when your market view is structured</div>
+                <div class="landing-outcome-grid">
+                    <div class="landing-card"><div class="landing-card-copy">Less manual searching across scattered public sources.</div></div>
+                    <div class="landing-card"><div class="landing-card-copy">A clearer view of which companies are showing demand.</div></div>
+                    <div class="landing-card"><div class="landing-card-copy">Better prioritization for outreach and business development.</div></div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            """
+            <div class="landing-auth-shell" id="auth-panel">
+                <div class="landing-auth-title">Start turning public signals into a more usable market view</div>
+                <div class="landing-auth-copy">Build your service map and generate your first buyer-company signals.</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        render_auth_account_panel()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    with right:
-        st.markdown('<div class="auth-right">', unsafe_allow_html=True)
-        st.markdown(auth_space_scene_html(), unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def page_billing(user):
