@@ -411,121 +411,123 @@ def landing_marketing_mockup_html(kind="hero"):
     if kind == "list":
         return """
         <div class="landing-mockup-wrap landing-mockup-list">
-            <div class="landing-orbit orbit-a"></div>
-            <div class="landing-orbit orbit-b"></div>
-            <div class="mockup-window">
-                <div class="mockup-topbar">
-                    <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
-                    <div class="mockup-url">Generate List</div>
-                </div>
-                <div class="mockup-content">
-                    <div class="mockup-stat-row">
-                        <div class="mockup-pill strong">3 services</div>
-                        <div class="mockup-pill">1 month</div>
-                        <div class="mockup-pill">15 results</div>
-                    </div>
-                    <div class="mockup-table-card">
-                        <div class="mockup-table-header">
-                            <span>Buyer Company</span><span>Signals</span><span>Service</span>
-                        </div>
-                        <div class="mockup-table-row"><span>DEPCOM Power</span><span>4</span><span>RCA</span></div>
-                        <div class="mockup-table-row"><span>EDP Renewables</span><span>3</span><span>QAQC</span></div>
-                        <div class="mockup-table-row"><span>SOLV Energy</span><span>2</span><span>Commissioning</span></div>
-                    </div>
+            <div class="epic-scene epic-scene-list">
+                <div class="epic-nebula nebula-a"></div>
+                <div class="epic-nebula nebula-b"></div>
+                <div class="epic-horizon"></div>
+                <div class="epic-cityline"></div>
+                <div class="epic-grid-floor"></div>
+            </div>
+            <div class="epic-panel primary-panel">
+                <div class="epic-panel-kicker">Generate List</div>
+                <div class="epic-panel-title">Public demand signals</div>
+                <div class="epic-panel-copy">Buyer companies surfaced from your saved service scope.</div>
+                <div class="epic-chip-row">
+                    <div class="epic-chip">3 services</div>
+                    <div class="epic-chip">1 month</div>
+                    <div class="epic-chip">15 results</div>
                 </div>
             </div>
-            <div class="mockup-float-card top-right">
-                <div class="float-kicker">Exportable</div>
-                <div class="float-title">CSV + PDF</div>
+            <div class="epic-panel side-panel top-right-panel">
+                <div class="epic-panel-kicker">Top signal</div>
+                <div class="epic-panel-title">DEPCOM Power</div>
+                <div class="epic-panel-copy">4 relevant postings</div>
+            </div>
+            <div class="epic-panel side-panel bottom-left-panel">
+                <div class="epic-panel-kicker">Export</div>
+                <div class="epic-panel-title">CSV + PDF</div>
+                <div class="epic-panel-copy">Ready to share</div>
             </div>
         </div>
         """
     if kind == "next":
         return """
         <div class="landing-mockup-wrap landing-mockup-next">
-            <div class="landing-orbit orbit-a"></div>
-            <div class="mockup-window">
-                <div class="mockup-topbar">
-                    <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
-                    <div class="mockup-url">Next Steps</div>
+            <div class="epic-scene epic-scene-next">
+                <div class="epic-nebula nebula-a"></div>
+                <div class="epic-nebula nebula-c"></div>
+                <div class="epic-horizon"></div>
+                <div class="epic-citadel"></div>
+                <div class="epic-glow-trail"></div>
+            </div>
+            <div class="epic-panel primary-panel">
+                <div class="epic-panel-kicker">Next Steps</div>
+                <div class="epic-panel-title">Top companies ranked</div>
+                <div class="epic-score-card">
+                    <div class="epic-rank-chip">#1</div>
+                    <div>
+                        <div class="epic-score-title">DEPCOM Power</div>
+                        <div class="epic-score-copy">5 relevant postings</div>
+                    </div>
                 </div>
-                <div class="mockup-content">
-                    <div class="mockup-rank-card">
-                        <div class="rank-chip">#1</div>
-                        <div>
-                            <div class="float-title">DEPCOM Power</div>
-                            <div class="float-kicker">5 relevant postings</div>
-                        </div>
-                    </div>
-                    <div class="mockup-mini-grid">
-                        <div class="mockup-mini-card"><span>Freshest signal</span><strong>04/03/26</strong></div>
-                        <div class="mockup-mini-card"><span>Repeated demand</span><strong>High</strong></div>
-                        <div class="mockup-mini-card"><span>Top focus</span><strong>Field Ops</strong></div>
-                    </div>
+                <div class="epic-mini-grid">
+                    <div class="epic-mini-card"><span>Freshest</span><strong>04/03/26</strong></div>
+                    <div class="epic-mini-card"><span>Pattern</span><strong>Repeated</strong></div>
+                    <div class="epic-mini-card"><span>Focus</span><strong>Field Ops</strong></div>
                 </div>
             </div>
-            <div class="mockup-float-card bottom-left">
-                <div class="float-kicker">Priority</div>
-                <div class="float-title">Top 5 ranked</div>
+            <div class="epic-panel side-panel bottom-left-panel">
+                <div class="epic-panel-kicker">Priority view</div>
+                <div class="epic-panel-title">Top 5 companies</div>
+                <div class="epic-panel-copy">Structured for action</div>
             </div>
         </div>
         """
     if kind == "expansion":
         return """
         <div class="landing-mockup-wrap landing-mockup-expansion">
-            <div class="landing-orbit orbit-b"></div>
-            <div class="mockup-window">
-                <div class="mockup-topbar">
-                    <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
-                    <div class="mockup-url">Potential Expansions</div>
-                </div>
-                <div class="mockup-content">
-                    <div class="mockup-stat-row">
-                        <div class="mockup-pill strong">7 gaps</div>
-                        <div class="mockup-pill">56 signals</div>
-                    </div>
-                    <div class="mockup-stack">
-                        <div class="mockup-stack-row"><span>Commissioning Support</span><strong>12</strong></div>
-                        <div class="mockup-stack-row"><span>Field Quality Oversight</span><strong>9</strong></div>
-                        <div class="mockup-stack-row"><span>Grid Integration Studies</span><strong>6</strong></div>
-                    </div>
+            <div class="epic-scene epic-scene-expansion">
+                <div class="epic-nebula nebula-b"></div>
+                <div class="epic-nebula nebula-c"></div>
+                <div class="epic-horizon"></div>
+                <div class="epic-mountain-left"></div>
+                <div class="epic-mountain-right"></div>
+                <div class="epic-signal-beam"></div>
+            </div>
+            <div class="epic-panel primary-panel">
+                <div class="epic-panel-kicker">Potential Expansions</div>
+                <div class="epic-panel-title">Adjacent scopes showing up</div>
+                <div class="epic-stack-card">
+                    <div class="epic-stack-row"><span>Commissioning Support</span><strong>12</strong></div>
+                    <div class="epic-stack-row"><span>Field Quality Oversight</span><strong>9</strong></div>
+                    <div class="epic-stack-row"><span>Grid Integration Studies</span><strong>6</strong></div>
                 </div>
             </div>
-            <div class="mockup-float-card top-right">
-                <div class="float-kicker">Trend</div>
-                <div class="float-title">Adjacent scopes</div>
+            <div class="epic-panel side-panel top-right-panel">
+                <div class="epic-panel-kicker">Signals</div>
+                <div class="epic-panel-title">56 tracked</div>
+                <div class="epic-panel-copy">Across saved evidence</div>
             </div>
         </div>
         """
     return """
     <div class="landing-mockup-wrap landing-mockup-hero">
-        <div class="landing-orbit orbit-a"></div>
-        <div class="landing-orbit orbit-b"></div>
-        <div class="mockup-window hero-window">
-            <div class="mockup-topbar">
-                <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
-                <div class="mockup-url">NextStepSignal</div>
-            </div>
-            <div class="mockup-content">
-                <div class="mockup-hero-banner">
-                    <div class="mockup-hero-title">Market signals in one view</div>
-                    <div class="mockup-hero-copy">Find buyers, rank targets, and see service gaps.</div>
-                </div>
-                <div class="mockup-hero-grid">
-                    <div class="mockup-hero-card"><span>Buyer companies</span><strong>58</strong></div>
-                    <div class="mockup-hero-card"><span>Top targets</span><strong>5</strong></div>
-                    <div class="mockup-hero-card"><span>Expansion gaps</span><strong>7</strong></div>
-                    <div class="mockup-hero-card"><span>Fresh signals</span><strong>04/03</strong></div>
-                </div>
+        <div class="epic-scene epic-scene-hero">
+            <div class="epic-nebula nebula-a"></div>
+            <div class="epic-nebula nebula-b"></div>
+            <div class="epic-nebula nebula-c"></div>
+            <div class="epic-horizon"></div>
+            <div class="epic-citadel large"></div>
+            <div class="epic-signal-beam hero-beam"></div>
+            <div class="epic-grid-floor"></div>
+        </div>
+        <div class="epic-panel hero-core-panel">
+            <div class="epic-panel-kicker">NextStepSignal</div>
+            <div class="epic-panel-title">Market signals in one view</div>
+            <div class="epic-panel-copy">Find buyers. Rank targets. See service gaps.</div>
+            <div class="epic-mini-grid">
+                <div class="epic-mini-card"><span>Buyer companies</span><strong>58</strong></div>
+                <div class="epic-mini-card"><span>Top targets</span><strong>5</strong></div>
+                <div class="epic-mini-card"><span>Expansion gaps</span><strong>7</strong></div>
             </div>
         </div>
-        <div class="mockup-float-card top-right">
-            <div class="float-kicker">Generate List</div>
-            <div class="float-title">Public demand signals</div>
+        <div class="epic-panel side-panel top-right-panel">
+            <div class="epic-panel-kicker">Generate List</div>
+            <div class="epic-panel-title">Public demand signals</div>
         </div>
-        <div class="mockup-float-card bottom-left">
-            <div class="float-kicker">Next Steps</div>
-            <div class="float-title">Top companies ranked</div>
+        <div class="epic-panel side-panel bottom-left-panel">
+            <div class="epic-panel-kicker">Next Steps</div>
+            <div class="epic-panel-title">Top companies ranked</div>
         </div>
     </div>
     """
@@ -3625,214 +3627,318 @@ def page_auth():
         }
         .landing-mockup-wrap {
             position: relative;
-            min-height: 300px;
-            padding: 1.2rem 0.2rem 0.6rem;
-        }
-        .landing-orbit {
-            position: absolute;
-            border: 1px solid rgba(147, 197, 253, 0.20);
-            border-radius: 999px;
-            pointer-events: none;
-        }
-        .landing-orbit.orbit-a {
-            width: 90%;
-            height: 78%;
-            left: 2%;
-            top: 6%;
-            transform: rotate(8deg);
-        }
-        .landing-orbit.orbit-b {
-            width: 78%;
-            height: 62%;
-            right: 0;
-            bottom: 2%;
-            transform: rotate(-12deg);
-        }
-        .mockup-window {
-            position: relative;
-            z-index: 2;
-            border-radius: 1.25rem;
+            min-height: 340px;
+            padding: 0.4rem 0.2rem 0.4rem;
             overflow: hidden;
-            border: 1px solid rgba(255,255,255,0.18);
-            background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(239,246,255,0.94));
-            box-shadow: 0 24px 50px rgba(15, 23, 42, 0.22);
         }
-        .mockup-topbar {
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.72rem 0.9rem;
-            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(255,255,255,0.92);
+        .epic-scene {
+            position: absolute;
+            inset: 0;
+            border-radius: 1.4rem;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 50% 78%, rgba(96, 165, 250, 0.40) 0%, rgba(96, 165, 250, 0.00) 26%),
+                linear-gradient(180deg, #040814 0%, #09122a 34%, #11234a 62%, #0d1b37 100%);
+            box-shadow: inset 0 0 140px rgba(15, 23, 42, 0.55);
         }
-        .mock-dot {
-            width: 0.48rem;
-            height: 0.48rem;
+        .epic-nebula {
+            position: absolute;
             border-radius: 999px;
-            background: rgba(15, 23, 42, 0.18);
+            filter: blur(26px);
+            opacity: 0.9;
+            mix-blend-mode: screen;
         }
-        .mockup-url {
-            margin-left: auto;
-            color: #334155;
-            font-size: 0.82rem;
-            font-weight: 700;
+        .epic-nebula.nebula-a {
+            width: 56%;
+            height: 34%;
+            top: 5%;
+            left: 7%;
+            background: radial-gradient(circle, rgba(96, 165, 250, 0.85) 0%, rgba(96, 165, 250, 0.00) 75%);
         }
-        .mockup-content {
-            padding: 1rem;
-            background: linear-gradient(180deg, #f8fbff 0%, #e8f1ff 100%);
+        .epic-nebula.nebula-b {
+            width: 52%;
+            height: 30%;
+            top: 0%;
+            right: 4%;
+            background: radial-gradient(circle, rgba(29, 78, 216, 0.75) 0%, rgba(29, 78, 216, 0.00) 78%);
         }
-        .mockup-hero-banner {
-            border-radius: 1rem;
-            padding: 1rem;
-            background: linear-gradient(135deg, #1d4ed8 0%, #60a5fa 100%);
+        .epic-nebula.nebula-c {
+            width: 38%;
+            height: 24%;
+            bottom: 18%;
+            right: 12%;
+            background: radial-gradient(circle, rgba(125, 211, 252, 0.55) 0%, rgba(125, 211, 252, 0.00) 80%);
+        }
+        .epic-horizon {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 24%;
+            height: 22%;
+            background: radial-gradient(circle at 50% 100%, rgba(96, 165, 250, 0.55) 0%, rgba(96, 165, 250, 0.0) 70%);
+            filter: blur(20px);
+        }
+        .epic-cityline {
+            position: absolute;
+            left: 7%;
+            right: 7%;
+            bottom: 19%;
+            height: 18%;
+            background:
+                linear-gradient(90deg, transparent 0 5%, #071120 5% 8%, transparent 8% 13%, #071120 13% 16%, transparent 16% 20%, #071120 20% 24%, transparent 24% 32%, #071120 32% 38%, transparent 38% 43%, #071120 43% 49%, transparent 49% 56%, #071120 56% 61%, transparent 61% 70%, #071120 70% 76%, transparent 76% 83%, #071120 83% 88%, transparent 88% 100%);
+            clip-path: polygon(0 100%, 0 62%, 5% 62%, 5% 44%, 9% 44%, 9% 70%, 13% 70%, 13% 36%, 18% 36%, 18% 66%, 24% 66%, 24% 40%, 30% 40%, 30% 74%, 38% 74%, 38% 30%, 44% 30%, 44% 68%, 52% 68%, 52% 38%, 59% 38%, 59% 74%, 68% 74%, 68% 46%, 74% 46%, 74% 64%, 82% 64%, 82% 34%, 88% 34%, 88% 70%, 94% 70%, 94% 52%, 100% 52%, 100% 100%);
+            opacity: 0.92;
+        }
+        .epic-citadel {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 23%;
+            width: 24%;
+            height: 34%;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.10), rgba(3, 8, 20, 0.94));
+            clip-path: polygon(0 100%, 6% 52%, 17% 52%, 17% 28%, 24% 28%, 24% 10%, 31% 10%, 31% 36%, 38% 36%, 38% 0, 49% 0, 49% 30%, 56% 30%, 56% 12%, 64% 12%, 64% 44%, 73% 44%, 73% 20%, 82% 20%, 82% 56%, 94% 56%, 100% 100%);
+            opacity: 0.96;
+        }
+        .epic-citadel.large {
+            width: 28%;
+            height: 38%;
+        }
+        .epic-grid-floor {
+            position: absolute;
+            left: -10%;
+            right: -10%;
+            bottom: -2%;
+            height: 28%;
+            background:
+                linear-gradient(180deg, rgba(96, 165, 250, 0.00), rgba(96, 165, 250, 0.20)),
+                linear-gradient(90deg, rgba(96, 165, 250, 0.14) 1px, transparent 1px),
+                linear-gradient(180deg, rgba(96, 165, 250, 0.12) 1px, transparent 1px);
+            background-size: 100% 100%, 38px 100%, 100% 28px;
+            transform: perspective(700px) rotateX(78deg);
+            transform-origin: center bottom;
+            opacity: 0.46;
+        }
+        .epic-mountain-left,
+        .epic-mountain-right {
+            position: absolute;
+            bottom: 18%;
+            width: 28%;
+            height: 30%;
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.20), rgba(2, 6, 23, 0.92));
+            opacity: 0.92;
+        }
+        .epic-mountain-left {
+            left: 0;
+            clip-path: polygon(0 100%, 0 48%, 26% 56%, 42% 28%, 58% 48%, 74% 16%, 100% 60%, 100% 100%);
+        }
+        .epic-mountain-right {
+            right: 0;
+            clip-path: polygon(0 100%, 0 60%, 24% 22%, 43% 48%, 61% 18%, 78% 50%, 100% 42%, 100% 100%);
+        }
+        .epic-signal-beam {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 28%;
+            width: 16px;
+            height: 48%;
+            background: linear-gradient(180deg, rgba(125, 211, 252, 0.00) 0%, rgba(125, 211, 252, 0.85) 42%, rgba(191, 219, 254, 0.10) 100%);
+            filter: blur(3px);
+            opacity: 0.9;
+        }
+        .epic-signal-beam.hero-beam {
+            height: 58%;
+        }
+        .epic-glow-trail {
+            position: absolute;
+            left: 18%;
+            top: 16%;
+            width: 54%;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(125, 211, 252, 0.0), rgba(125, 211, 252, 0.85), rgba(125, 211, 252, 0.0));
+            transform: rotate(-18deg);
+            box-shadow: 0 0 18px rgba(125, 211, 252, 0.5);
+        }
+        .epic-panel {
+            position: absolute;
+            z-index: 3;
+            border: 1px solid rgba(191, 219, 254, 0.18);
+            background: linear-gradient(180deg, rgba(7, 14, 28, 0.90), rgba(13, 27, 55, 0.82));
+            backdrop-filter: blur(8px);
+            box-shadow: 0 22px 44px rgba(2, 6, 23, 0.35);
             color: #eff6ff;
-            margin-bottom: 0.85rem;
         }
-        .mockup-hero-title {
-            font-size: 1.15rem;
+        .epic-panel.primary-panel,
+        .epic-panel.hero-core-panel {
+            left: 6%;
+            top: 9%;
+            width: 62%;
+            border-radius: 1.3rem;
+            padding: 1rem 1rem 0.95rem;
+        }
+        .epic-panel.hero-core-panel {
+            width: 60%;
+            top: 13%;
+        }
+        .epic-panel.side-panel {
+            min-width: 180px;
+            border-radius: 1rem;
+            padding: 0.82rem 0.9rem;
+        }
+        .epic-panel.top-right-panel {
+            top: 1.4rem;
+            right: 0.5rem;
+        }
+        .epic-panel.bottom-left-panel {
+            left: 0.5rem;
+            bottom: 0.8rem;
+        }
+        .epic-panel-kicker {
+            color: #93c5fd;
+            font-size: 0.72rem;
             font-weight: 800;
-            margin-bottom: 0.2rem;
-        }
-        .mockup-hero-copy {
-            font-size: 0.88rem;
-            color: #dbeafe;
-        }
-        .mockup-hero-grid,
-        .mockup-mini-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 0.75rem;
-        }
-        .mockup-hero-card,
-        .mockup-mini-card {
-            border-radius: 0.95rem;
-            padding: 0.8rem 0.85rem;
-            background: rgba(255,255,255,0.88);
-            border: 1px solid rgba(96, 165, 250, 0.18);
-        }
-        .mockup-hero-card span,
-        .mockup-mini-card span {
-            display: block;
-            color: #64748b;
-            font-size: 0.76rem;
-            margin-bottom: 0.25rem;
             text-transform: uppercase;
-            letter-spacing: 0.02em;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.24rem;
         }
-        .mockup-hero-card strong,
-        .mockup-mini-card strong {
-            color: #0f172a;
+        .epic-panel-title,
+        .epic-score-title {
+            color: #eff6ff;
             font-size: 1.05rem;
             font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 0.2rem;
         }
-        .mockup-stat-row {
+        .epic-panel-copy,
+        .epic-score-copy {
+            color: #cbd5e1;
+            font-size: 0.84rem;
+            line-height: 1.5;
+        }
+        .epic-chip-row {
             display: flex;
             flex-wrap: wrap;
             gap: 0.55rem;
-            margin-bottom: 0.8rem;
+            margin-top: 0.72rem;
         }
-        .mockup-pill {
+        .epic-chip {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 0.48rem 0.72rem;
+            padding: 0.42rem 0.7rem;
             border-radius: 999px;
-            background: rgba(255,255,255,0.85);
-            border: 1px solid rgba(96, 165, 250, 0.16);
-            color: #334155;
-            font-size: 0.76rem;
+            background: rgba(96, 165, 250, 0.14);
+            border: 1px solid rgba(96, 165, 250, 0.18);
+            color: #dbeafe;
+            font-size: 0.74rem;
             font-weight: 700;
         }
-        .mockup-pill.strong {
-            background: rgba(59, 130, 246, 0.16);
-            color: #1d4ed8;
-        }
-        .mockup-table-card,
-        .mockup-stack {
-            border-radius: 1rem;
-            overflow: hidden;
-            background: rgba(255,255,255,0.90);
-            border: 1px solid rgba(96, 165, 250, 0.14);
-        }
-        .mockup-table-header,
-        .mockup-table-row,
-        .mockup-stack-row {
+        .epic-mini-grid {
             display: grid;
-            grid-template-columns: 1.4fr 0.45fr 0.7fr;
-            gap: 0.75rem;
-            padding: 0.72rem 0.85rem;
-            align-items: center;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.6rem;
+            margin-top: 0.72rem;
         }
-        .mockup-table-header {
-            background: rgba(29, 78, 216, 0.08);
-            color: #1e3a8a;
-            font-size: 0.74rem;
+        .epic-mini-card {
+            border-radius: 0.95rem;
+            padding: 0.72rem 0.8rem;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(191, 219, 254, 0.12);
+        }
+        .epic-mini-card span {
+            display: block;
+            color: #93c5fd;
+            font-size: 0.68rem;
             font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 0.02em;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.22rem;
         }
-        .mockup-table-row {
-            color: #0f172a;
-            font-size: 0.83rem;
-            border-top: 1px solid rgba(15, 23, 42, 0.05);
+        .epic-mini-card strong {
+            color: #eff6ff;
+            font-size: 0.95rem;
+            font-weight: 800;
         }
-        .mockup-stack-row {
-            grid-template-columns: 1fr 0.35fr;
-            color: #0f172a;
-            font-size: 0.84rem;
-            border-top: 1px solid rgba(15, 23, 42, 0.05);
-        }
-        .mockup-rank-card {
+        .epic-score-card {
             display: flex;
             align-items: center;
             gap: 0.8rem;
-            border-radius: 1rem;
-            padding: 0.85rem;
-            background: rgba(255,255,255,0.90);
-            border: 1px solid rgba(96, 165, 250, 0.18);
-            margin-bottom: 0.8rem;
+            margin-top: 0.3rem;
         }
-        .rank-chip {
+        .epic-rank-chip {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 2.25rem;
-            height: 2.25rem;
+            width: 2.5rem;
+            height: 2.5rem;
             border-radius: 999px;
-            background: linear-gradient(135deg, #1d4ed8 0%, #60a5fa 100%);
+            background: linear-gradient(135deg, #1d4ed8 0%, #7dd3fc 100%);
             color: #eff6ff;
-            font-weight: 800;
+            font-weight: 900;
+            box-shadow: 0 0 28px rgba(96, 165, 250, 0.32);
         }
-        .mockup-float-card {
-            position: absolute;
-            z-index: 3;
-            min-width: 170px;
-            padding: 0.8rem 0.9rem;
+        .epic-stack-card {
+            margin-top: 0.72rem;
             border-radius: 1rem;
-            background: rgba(255,255,255,0.96);
-            border: 1px solid rgba(255,255,255,0.55);
-            box-shadow: 0 18px 38px rgba(15, 23, 42, 0.14);
+            overflow: hidden;
+            border: 1px solid rgba(191, 219, 254, 0.12);
+            background: rgba(255,255,255,0.05);
         }
-        .mockup-float-card.top-right {
-            top: 1.45rem;
-            right: -0.25rem;
+        .epic-stack-row {
+            display: grid;
+            grid-template-columns: 1fr 0.3fr;
+            gap: 0.6rem;
+            align-items: center;
+            padding: 0.72rem 0.82rem;
+            color: #eff6ff;
+            border-top: 1px solid rgba(191, 219, 254, 0.08);
+            font-size: 0.84rem;
         }
-        .mockup-float-card.bottom-left {
-            left: 0;
-            bottom: 0.25rem;
+        .epic-stack-row:first-child {
+            border-top: 0;
         }
-        .float-kicker {
-            color: #64748b;
-            font-size: 0.74rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.02em;
-            margin-bottom: 0.18rem;
+        .epic-stack-row strong {
+            text-align: right;
+            color: #93c5fd;
+            font-size: 0.94rem;
         }
-        .float-title {
-            color: #0f172a;
-            font-size: 0.95rem;
-            font-weight: 800;
+        .landing-mockup-hero .epic-scene,
+        .landing-mockup-next .epic-scene,
+        .landing-mockup-list .epic-scene,
+        .landing-mockup-expansion .epic-scene {
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        @media (max-width: 1100px) {
+            .epic-panel.primary-panel,
+            .epic-panel.hero-core-panel {
+                width: 72%;
+            }
+            .epic-mini-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 760px) {
+            .epic-panel.primary-panel,
+            .epic-panel.hero-core-panel {
+                position: relative;
+                left: auto;
+                top: auto;
+                width: auto;
+                margin: 1rem 0.55rem 0;
+            }
+            .epic-panel.top-right-panel,
+            .epic-panel.bottom-left-panel {
+                position: relative;
+                top: auto;
+                right: auto;
+                left: auto;
+                bottom: auto;
+                margin: 0.75rem 0.55rem 0;
+            }
+            .landing-mockup-wrap {
+                min-height: 420px;
+            }
         }
         .landing-auth-shell {
             border: 1px solid var(--brand-border);
@@ -3881,15 +3987,6 @@ def page_auth():
             }
             .landing-feature-layout {
                 grid-template-columns: 1fr;
-            }
-            .mockup-float-card.top-right,
-            .mockup-float-card.bottom-left {
-                position: relative;
-                top: auto;
-                right: auto;
-                left: auto;
-                bottom: auto;
-                margin-top: 0.75rem;
             }
         }
         </style>
