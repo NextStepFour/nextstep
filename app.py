@@ -27,6 +27,7 @@ ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "rgordon@heliovolta.com").strip().lower()
 ADMIN_DEMO_CREDITS = int(os.getenv("ADMIN_DEMO_CREDITS", "100"))
 TIME_OPTIONS = ["1 week", "2 weeks", "1 month", "2 months", "3 months"]
 NEXT_STEPS_REFRESH_COST = 10
+COMPANY_DEEP_DIVE_COST = 5
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8501")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 DISCOVERY_MODEL = os.getenv("OPENAI_DISCOVERY_MODEL", "gpt-5-mini")
@@ -1900,40 +1901,6 @@ def build_next_steps_summary(top_df, all_df):
     return lines
 
 
-def build_next_steps_takeaways(top_df, all_df):
-    takeaways = []
-    if all_df.empty:
-        return takeaways
-
-    multiple_postings = int((all_df["relevant_posting_count"] >= 2).sum())
-    salary_disclosed = int((all_df["salary_signal"] != "Not disclosed").sum())
-    top_company = safe_text(top_df.iloc[0]["buyer_company"]) if not top_df.empty else "Unknown"
-    top_company_count = int(top_df.iloc[0]["relevant_posting_count"]) if not top_df.empty else 0
-
-    takeaways.append(
-        f"{multiple_postings} compan{'ies' if multiple_postings != 1 else 'y'} show repeated relevant hiring signals, which is the strongest indicator of non-isolated demand."
-    )
-    takeaways.append(
-        f"{salary_disclosed} compan{'ies' if salary_disclosed != 1 else 'y'} disclosed explicit base salary, so compensation is a supporting signal rather than the main ranking driver in this dataset."
-    )
-    if top_company:
-        takeaways.append(
-            f"{top_company} ranks at the top of the current review based on the strongest combined signal set, including {top_company_count} relevant posting{'s' if top_company_count != 1 else ''} and recent activity."
-        )
-
-    matched_service_counts = {}
-    for value in all_df["matched_services"].fillna(""):
-        for service in split_service_values(value):
-            matched_service_counts[service] = matched_service_counts.get(service, 0) + 1
-    if matched_service_counts:
-        top_service = sorted(matched_service_counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
-        takeaways.append(
-            f"The most common matched service signal in this review is {top_service}, which is showing up across multiple buyer-company results."
-        )
-
-    return takeaways[:4]
-
-
 def build_company_next_steps_description(company_row, company_evidence_df):
     salary_disclosed_count = int(company_evidence_df["base_salary"].fillna("").astype(str).str.strip().ne("").sum())
     description_parts = [
@@ -2848,18 +2815,6 @@ def page_next_steps():
             font-size: 0.88rem;
             line-height: 1.45;
         }
-        .nextsteps-takeaway-box {
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 1rem;
-            background: rgba(15, 23, 42, 0.35);
-            padding: 1rem 1rem 0.55rem 1rem;
-            margin-bottom: 1rem;
-        }
-        .nextsteps-takeaway-item {
-            color: #dbeafe;
-            line-height: 1.6;
-            margin-bottom: 0.55rem;
-        }
         @media (max-width: 900px) {
             .nextsteps-grid {
                 grid-template-columns: 1fr;
@@ -2934,17 +2889,6 @@ def page_next_steps():
     )
     multiple_postings = int((company_priority_df["relevant_posting_count"] >= 2).sum())
     salary_disclosed = int((company_priority_df["salary_signal"] != "Not disclosed").sum())
-    matched_service_counts = {}
-    for value in company_priority_df["matched_services"].fillna(""):
-        for service in split_service_values(value):
-            matched_service_counts[service] = matched_service_counts.get(service, 0) + 1
-    top_service = (
-        sorted(matched_service_counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
-        if matched_service_counts
-        else "Not enough data"
-    )
-    highest_signal_company = safe_text(top_companies_df.iloc[0]["buyer_company"]) if not top_companies_df.empty else "Unknown"
-
     st.subheader("Analysis")
     st.markdown(
         (
@@ -2976,21 +2920,6 @@ def page_next_steps():
     ]
     st.markdown("**Top Priority Companies**")
     st.dataframe(pretty_df(priority_table_df), use_container_width=True, hide_index=True)
-
-    st.markdown(
-        (
-            '<div class="nextsteps-takeaway-box">'
-            '<div class="nextsteps-section-label">Key Takeaways</div>'
-            + "".join(
-                f'<div class="nextsteps-takeaway-item">{escape(line)}</div>'
-                for line in build_next_steps_takeaways(top_companies_df, company_priority_df)
-            )
-            + f'<div class="nextsteps-takeaway-item">Highest-signal company in the current review: {escape(highest_signal_company)}.</div>'
-            + f'<div class="nextsteps-takeaway-item">Most common matched service across the current review: {escape(top_service)}.</div>'
-            + '</div>'
-        ),
-        unsafe_allow_html=True,
-    )
 
     st.subheader("Priority Company Reports")
     for _, company_row in top_companies_df.iterrows():
@@ -3053,31 +2982,40 @@ def page_next_steps():
         deep_dive_entry = deep_dive_cache.get(company_cache_key)
 
         if st.button(
-            f"Expand company hiring view for {company_name}",
+            f"Expand company hiring view for {company_name} ({COMPANY_DEEP_DIVE_COST} credits)",
             key=f"expand_company_view_{company_cache_key}",
+            type="primary",
         ):
-            try:
-                with st.spinner(f"Searching for additional public postings from {company_name}..."):
-                    api_client = client()
-                    raw_json, deep_dive_df = search_company_deep_dive(
-                        api_client,
-                        company_name,
-                        matched_services_text,
-                        company_evidence_df,
-                    )
+            current_balance = credits()
+            if current_balance < COMPANY_DEEP_DIVE_COST:
+                st.error(f"You need at least {COMPANY_DEEP_DIVE_COST} credits to run a company deep dive.")
+            else:
+                try:
+                    with st.spinner(f"Searching for additional public postings from {company_name}..."):
+                        api_client = client()
+                        raw_json, deep_dive_df = search_company_deep_dive(
+                            api_client,
+                            company_name,
+                            matched_services_text,
+                            company_evidence_df,
+                        )
+                        remaining = add_credits(-COMPANY_DEEP_DIVE_COST)
+                        deep_dive_entry = {
+                            "raw_json": raw_json,
+                            "records": deep_dive_df.to_dict(orient="records"),
+                            "error": None,
+                        }
+                        deep_dive_cache[company_cache_key] = deep_dive_entry
+                        st.success(
+                            f"Company deep dive complete. {COMPANY_DEEP_DIVE_COST} credits used. Credits remaining: {remaining}."
+                        )
+                except Exception as exc:
                     deep_dive_entry = {
-                        "raw_json": raw_json,
-                        "records": deep_dive_df.to_dict(orient="records"),
-                        "error": None,
+                        "raw_json": "",
+                        "records": [],
+                        "error": str(exc),
                     }
                     deep_dive_cache[company_cache_key] = deep_dive_entry
-            except Exception as exc:
-                deep_dive_entry = {
-                    "raw_json": "",
-                    "records": [],
-                    "error": str(exc),
-                }
-                deep_dive_cache[company_cache_key] = deep_dive_entry
 
         deep_dive_entry = deep_dive_cache.get(company_cache_key)
         if not deep_dive_entry:
