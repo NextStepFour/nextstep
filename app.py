@@ -784,6 +784,19 @@ def init_db():
             """
         )
         db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS deep_dive_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                company_name TEXT NOT NULL,
+                matched_services_text TEXT,
+                credits_used INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                evidence_json TEXT NOT NULL
+            )
+            """
+        )
+        db.execute(
             "INSERT OR IGNORE INTO settings (key, value) VALUES ('credits_balance', ?)",
             (str(DEFAULT_CREDITS),),
         )
@@ -813,6 +826,9 @@ def init_db():
         expansion_columns = [row["name"] for row in db.execute("PRAGMA table_info(expansion_runs)").fetchall()]
         if expansion_columns and "user_id" not in expansion_columns:
             db.execute("ALTER TABLE expansion_runs ADD COLUMN user_id INTEGER")
+        deep_dive_columns = [row["name"] for row in db.execute("PRAGMA table_info(deep_dive_runs)").fetchall()]
+        if deep_dive_columns and "user_id" not in deep_dive_columns:
+            db.execute("ALTER TABLE deep_dive_runs ADD COLUMN user_id INTEGER")
 
 
 def hash_password(password):
@@ -1270,6 +1286,41 @@ def expansion_runs_df(user_id=None):
     return pd.DataFrame([dict(r) for r in rows])
 
 
+def save_deep_dive_run(company_name, matched_services_text, credits_used, evidence_df, user_id=None):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user:
+        raise ValueError("Please sign in to save expanded search evidence.")
+    with conn() as db:
+        cursor = db.execute(
+            """
+            INSERT INTO deep_dive_runs (
+                user_id, company_name, matched_services_text, credits_used, created_at, evidence_json
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user["id"],
+                safe_text(company_name, "Unknown Company"),
+                safe_text(matched_services_text),
+                int(credits_used),
+                datetime.now().strftime("%Y-%m-%d %H:%M"),
+                evidence_df.to_json(orient="records"),
+            ),
+        )
+    return cursor.lastrowid
+
+
+def deep_dive_runs_df(user_id=None):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user:
+        return pd.DataFrame()
+    with conn() as db:
+        rows = db.execute(
+            "SELECT * FROM deep_dive_runs WHERE user_id = ? ORDER BY id DESC",
+            (user["id"],),
+        ).fetchall()
+    return pd.DataFrame([dict(r) for r in rows])
+
+
 def load_df(json_text):
     try:
         return pd.DataFrame(json.loads(json_text or "[]"))
@@ -1607,6 +1658,38 @@ def normalize_company_deep_dive_record(item, company_name):
     ]:
         row.setdefault(column, None)
     return row
+
+
+def deep_dive_records_to_evidence_df(records_df, matched_services_text):
+    if records_df.empty:
+        return pd.DataFrame(columns=EVIDENCE_COLUMNS)
+    services = split_service_values(matched_services_text)
+    primary_service = services[0] if services else "Expanded Search"
+    evidence_rows = []
+    for _, row in records_df.iterrows():
+        evidence_rows.append(
+            {
+                "matched_service": primary_service,
+                "company_name": safe_text(row.get("company_name")),
+                "job_title": safe_text(row.get("job_title")),
+                "base_salary": safe_text(row.get("base_salary")) or None,
+                "location": safe_text(row.get("location")) or None,
+                "country": "United States",
+                "source_type": safe_text(row.get("source_type")) or None,
+                "opportunity_status": safe_text(row.get("opportunity_status"), "Unknown"),
+                "posted_date": safe_text(row.get("posted_date")) or None,
+                "match_score": 90 if safe_text(row.get("relevance_bucket")) == "Directly relevant" else (70 if safe_text(row.get("relevance_bucket")) == "Adjacent" else 45),
+                "match_type": "Direct" if safe_text(row.get("relevance_bucket")) == "Directly relevant" else ("Peripheral" if safe_text(row.get("relevance_bucket")) == "Adjacent" else "Weak"),
+                "likely_service_need": safe_text(row.get("why_it_matters")) or None,
+                "why_it_matches": [safe_text(row.get("why_it_matters"))] if safe_text(row.get("why_it_matters")) else [],
+                "matching_responsibilities": [],
+                "matching_keywords": [],
+                "buyer_department": None,
+                "outreach_next_step": None,
+                "source_url": safe_text(row.get("source_url")) or None,
+            }
+        )
+    return ensure_evidence_columns(pd.DataFrame(evidence_rows))
 
 
 def dedupe_company_deep_dive_records(records):
@@ -2267,7 +2350,8 @@ def render_potential_expansions_report(
 def build_master_evidence_data():
     runs = runs_df()
     expansion_runs = expansion_runs_df()
-    if runs.empty and expansion_runs.empty:
+    deep_dive_runs = deep_dive_runs_df()
+    if runs.empty and expansion_runs.empty and deep_dive_runs.empty:
         return pd.DataFrame(columns=EVIDENCE_COLUMNS)
 
     evidence_frames = []
@@ -2294,14 +2378,36 @@ def build_master_evidence_data():
         evidence_df["source_origin"] = "Potential Expansions"
         evidence_frames.append(evidence_df)
 
+    for _, deep_dive_row in deep_dive_runs.iterrows():
+        raw_deep_dive_df = load_df(deep_dive_row["evidence_json"])
+        evidence_df = deep_dive_records_to_evidence_df(
+            raw_deep_dive_df,
+            deep_dive_row.get("matched_services_text"),
+        )
+        if evidence_df.empty:
+            continue
+        evidence_df["source_run_id"] = deep_dive_row["id"]
+        evidence_df["source_run_created_at"] = deep_dive_row["created_at"]
+        evidence_df["source_services"] = deep_dive_row["matched_services_text"]
+        evidence_df["source_origin"] = "Expanded Search"
+        evidence_frames.append(evidence_df)
+
     if not evidence_frames:
         return pd.DataFrame(columns=EVIDENCE_COLUMNS)
 
     master_evidence_df = pd.concat(evidence_frames, ignore_index=True)
+    master_evidence_df["_source_created_sort"] = pd.to_datetime(master_evidence_df.get("source_run_created_at"), errors="coerce")
+    master_evidence_df = master_evidence_df.sort_values(
+        ["_source_created_sort", "match_score", "company_name", "job_title"],
+        ascending=[False, False, True, True],
+        na_position="last",
+    )
     master_evidence_df = master_evidence_df.drop_duplicates(
         subset=["source_url", "company_name", "job_title", "matched_service"],
         keep="first",
     ).reset_index(drop=True)
+    if "_source_created_sort" in master_evidence_df.columns:
+        master_evidence_df = master_evidence_df.drop(columns=["_source_created_sort"])
     return master_evidence_df
 
 
@@ -2315,8 +2421,16 @@ def build_expansion_baseline_evidence(selected_service_names):
         return pd.DataFrame(columns=EVIDENCE_COLUMNS)
 
     baseline_df = ensure_evidence_columns(master_evidence_df).copy()
+    if "source_services" not in baseline_df.columns:
+        baseline_df["source_services"] = ""
     baseline_df = baseline_df[
-        baseline_df["matched_service"].fillna("").astype(str).isin(selected_set)
+        baseline_df.apply(
+            lambda row: (
+                safe_text(row.get("matched_service")) in selected_set
+                or bool(selected_set.intersection(split_service_values(row.get("source_services"))))
+            ),
+            axis=1,
+        )
     ].copy()
     if baseline_df.empty:
         return pd.DataFrame(columns=EVIDENCE_COLUMNS)
@@ -2343,6 +2457,35 @@ def parse_salary_high_value(salary_text):
     return max(values)
 
 
+def build_expansion_company_signal_map():
+    runs = expansion_runs_df()
+    if runs.empty:
+        return {}
+    signal_map = {}
+    for _, run in runs.iterrows():
+        created_at = pd.to_datetime(run.get("created_at"), errors="coerce")
+        expansion_df = load_df(run.get("expansion_json"))
+        if expansion_df.empty:
+            continue
+        for _, exp_row in expansion_df.iterrows():
+            companies = split_service_values(exp_row.get("companies_showing_interest"))
+            signal_count = int(exp_row.get("supporting_signal_count") or 0)
+            for company in companies:
+                canonical = canonicalize_company_name(company)
+                if not canonical:
+                    continue
+                entry = signal_map.setdefault(
+                    canonical,
+                    {"company_names": set(), "signal_mentions": 0, "latest_created_at": pd.NaT},
+                )
+                entry["company_names"].add(safe_text(company, "Unknown Company"))
+                entry["signal_mentions"] += max(1, signal_count)
+                if pd.notna(created_at):
+                    if pd.isna(entry["latest_created_at"]) or created_at > entry["latest_created_at"]:
+                        entry["latest_created_at"] = created_at
+    return signal_map
+
+
 def build_next_steps_company_table(evidence_df):
     if evidence_df.empty:
         return pd.DataFrame()
@@ -2350,6 +2493,7 @@ def build_next_steps_company_table(evidence_df):
     temp = ensure_evidence_columns(evidence_df).copy()
     temp["canonical_company_name"] = temp["company_name"].apply(canonicalize_company_name)
     temp["posted_date_parsed"] = pd.to_datetime(temp["posted_date"], errors="coerce")
+    expansion_signal_map = build_expansion_company_signal_map()
     rows = []
     now_ts = pd.Timestamp.now().normalize()
 
@@ -2408,6 +2552,16 @@ def build_next_steps_company_table(evidence_df):
             else:
                 salary_rank += 1
 
+        expansion_entry = expansion_signal_map.get(canonical_company, {})
+        expansion_signal_count = int(expansion_entry.get("signal_mentions") or 0)
+        expansion_rank = 1 if expansion_signal_count else 0
+        if expansion_signal_count >= 12:
+            expansion_rank = 4
+        elif expansion_signal_count >= 6:
+            expansion_rank = 3
+        elif expansion_signal_count >= 2:
+            expansion_rank = 2
+
         why_parts = [
             f"{relevant_posting_count} relevant posting{'s' if relevant_posting_count != 1 else ''} found",
         ]
@@ -2419,6 +2573,8 @@ def build_next_steps_company_table(evidence_df):
             why_parts.append(f"most recent posting dated {most_recent_posted_text}")
         if salary_signal:
             why_parts.append(f"explicit base salary disclosed ({salary_signal})")
+        if expansion_signal_count:
+            why_parts.append(f"also highlighted in saved expansion analysis ({expansion_signal_count} signal{'s' if expansion_signal_count != 1 else ''})")
 
         suggested_next_step = (
             f"Prioritize outreach to the {likely_buyer_department} team and reference the matching postings."
@@ -2441,6 +2597,8 @@ def build_next_steps_company_table(evidence_df):
                 "_canonical_company_name": canonical_company,
                 "_recency_rank": recency_rank,
                 "_salary_rank": salary_rank,
+                "_expansion_rank": expansion_rank,
+                "_expansion_signal_count": expansion_signal_count,
             }
         )
 
@@ -2448,8 +2606,8 @@ def build_next_steps_company_table(evidence_df):
         return pd.DataFrame()
 
     return pd.DataFrame(rows).sort_values(
-        ["relevant_posting_count", "related_posting_count", "_recency_rank", "_salary_rank", "buyer_company"],
-        ascending=[False, False, False, False, True],
+        ["relevant_posting_count", "related_posting_count", "_expansion_rank", "_expansion_signal_count", "_recency_rank", "_salary_rank", "buyer_company"],
+        ascending=[False, False, False, False, False, False, True],
     ).reset_index(drop=True)
 
 
@@ -3989,6 +4147,13 @@ def page_next_steps():
                                 company_evidence_df,
                             )
                             remaining = add_credits(-COMPANY_DEEP_DIVE_COST)
+                            if not deep_dive_df.empty:
+                                save_deep_dive_run(
+                                    company_name=company_name,
+                                    matched_services_text=matched_services_text,
+                                    credits_used=COMPANY_DEEP_DIVE_COST,
+                                    evidence_df=deep_dive_df,
+                                )
                             deep_dive_entry = {
                                 "raw_json": raw_json,
                                 "records": deep_dive_df.to_dict(orient="records"),
