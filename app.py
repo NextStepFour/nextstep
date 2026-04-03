@@ -759,6 +759,25 @@ def init_db():
             """
         )
         db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS expansion_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                services_text TEXT NOT NULL,
+                service_count INTEGER NOT NULL DEFAULT 0,
+                used_saved_baseline INTEGER NOT NULL DEFAULT 1,
+                broader_validation INTEGER NOT NULL DEFAULT 0,
+                high_volume_mode INTEGER NOT NULL DEFAULT 0,
+                location_filter TEXT NOT NULL,
+                time_window TEXT NOT NULL,
+                credits_used INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                evidence_json TEXT NOT NULL,
+                expansion_json TEXT NOT NULL
+            )
+            """
+        )
+        db.execute(
             "INSERT OR IGNORE INTO settings (key, value) VALUES ('credits_balance', ?)",
             (str(DEFAULT_CREDITS),),
         )
@@ -783,6 +802,9 @@ def init_db():
             db.execute("ALTER TABLE searches ADD COLUMN enrichment_enabled INTEGER NOT NULL DEFAULT 1")
         if "duration_seconds" not in search_columns:
             db.execute("ALTER TABLE searches ADD COLUMN duration_seconds REAL")
+        expansion_columns = [row["name"] for row in db.execute("PRAGMA table_info(expansion_runs)").fetchall()]
+        if expansion_columns and "user_id" not in expansion_columns:
+            db.execute("ALTER TABLE expansion_runs ADD COLUMN user_id INTEGER")
 
 
 def hash_password(password):
@@ -1070,6 +1092,61 @@ def save_run(
             ),
         )
     return cursor.lastrowid
+
+
+def save_expansion_run(
+    services_text,
+    service_count,
+    used_saved_baseline,
+    broader_validation,
+    high_volume_mode,
+    location_filter,
+    time_window,
+    credits_used,
+    evidence_df,
+    expansion_df,
+    user_id=None,
+):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user:
+        raise ValueError("Please sign in to save expansion analysis.")
+    with conn() as db:
+        cursor = db.execute(
+            """
+            INSERT INTO expansion_runs (
+                user_id, services_text, service_count, used_saved_baseline, broader_validation,
+                high_volume_mode, location_filter, time_window, credits_used, created_at,
+                evidence_json, expansion_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user["id"],
+                services_text,
+                int(service_count),
+                int(used_saved_baseline),
+                int(broader_validation),
+                int(high_volume_mode),
+                location_filter,
+                time_window,
+                int(credits_used),
+                datetime.now().strftime("%Y-%m-%d %H:%M"),
+                evidence_df.to_json(orient="records"),
+                expansion_df.to_json(orient="records"),
+            ),
+        )
+    return cursor.lastrowid
+
+
+def expansion_runs_df(user_id=None):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user:
+        return pd.DataFrame()
+    with conn() as db:
+        rows = db.execute(
+            "SELECT * FROM expansion_runs WHERE user_id = ? ORDER BY id DESC",
+            (user["id"],),
+        ).fetchall()
+    return pd.DataFrame([dict(r) for r in rows])
 
 
 def load_df(json_text):
@@ -1838,7 +1915,8 @@ def build_expansion_company_views(expansion_row, evidence_df):
 
 def build_master_evidence_data():
     runs = runs_df()
-    if runs.empty:
+    expansion_runs = expansion_runs_df()
+    if runs.empty and expansion_runs.empty:
         return pd.DataFrame(columns=EVIDENCE_COLUMNS)
 
     evidence_frames = []
@@ -1852,6 +1930,17 @@ def build_master_evidence_data():
         evidence_df["source_run_id"] = run_record["id"]
         evidence_df["source_run_created_at"] = run_record["created_at"]
         evidence_df["source_services"] = run_record["services_text"]
+        evidence_df["source_origin"] = "Generate List"
+        evidence_frames.append(evidence_df)
+
+    for _, expansion_row in expansion_runs.iterrows():
+        evidence_df = ensure_evidence_columns(load_df(expansion_row["evidence_json"]))
+        if evidence_df.empty:
+            continue
+        evidence_df["source_run_id"] = expansion_row["id"]
+        evidence_df["source_run_created_at"] = expansion_row["created_at"]
+        evidence_df["source_services"] = expansion_row["services_text"]
+        evidence_df["source_origin"] = "Potential Expansions"
         evidence_frames.append(evidence_df)
 
     if not evidence_frames:
@@ -3694,6 +3783,19 @@ def page_potential_expansions():
                 st.info("No clear expansion ideas were found from the current evidence.")
                 return
 
+            services_text = "; ".join(selected)
+            save_expansion_run(
+                services_text=services_text,
+                service_count=len(selected_rows),
+                used_saved_baseline=not run_broader_validation,
+                broader_validation=run_broader_validation,
+                high_volume_mode=high_volume,
+                location_filter=location_filter if run_broader_validation else "Saved evidence baseline",
+                time_window=time_window if run_broader_validation else "Saved evidence baseline",
+                credits_used=credits_needed,
+                evidence_df=evidence_df,
+                expansion_df=expansion_df,
+            )
             remaining = add_credits(-credits_needed)
             display_expansion_df = format_lists_for_display(expansion_df)
             st.success(f"Expansion analysis complete. Credits remaining: {remaining}")
@@ -3835,7 +3937,6 @@ def page_potential_expansions():
             st.markdown("**Top Expansion Opportunities**")
             st.dataframe(pretty_df(ranked_table_df), use_container_width=True, hide_index=True)
 
-            services_text = "; ".join(selected)
             st.download_button(
                 "Download potential expansions as CSV",
                 data=csv_data(ranked_table_df),
@@ -3900,9 +4001,6 @@ def page_potential_expansions():
 
             with st.expander("Supporting evidence used for expansion analysis"):
                 st.dataframe(format_lists_for_display(evidence_df), use_container_width=True)
-
-            with st.expander("Raw expansion JSON"):
-                st.code(raw_json, language="json")
             st.markdown("</div>", unsafe_allow_html=True)
 
         except ValueError as exc:
