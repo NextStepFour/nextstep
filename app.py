@@ -2141,34 +2141,55 @@ def ensure_evidence_columns(evidence_df):
 def flatten_unique(values):
     found = []
     for value in values:
-        if isinstance(value, list):
-            for item in value:
-                if pd.notna(item):
-                    item_text = str(item).strip()
-                    if item_text and item_text not in found:
-                        found.append(item_text)
-        elif pd.notna(value):
-            value_text = str(value).strip()
-            if value_text and value_text not in found:
-                found.append(value_text)
+        for item_text in normalized_text_values(value):
+            if item_text and item_text not in found:
+                found.append(item_text)
     return found
 
 
-def safe_text(value, default=""):
-    if pd.isna(value):
-        return default
+def normalized_text_values(value):
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        return [text] if text else []
+    if isinstance(value, dict):
+        text = json.dumps(value, sort_keys=True).strip()
+        return [text] if text else []
+    if isinstance(value, (list, tuple, set)):
+        flattened = []
+        for item in value:
+            flattened.extend(normalized_text_values(item))
+        return flattened
+    if isinstance(value, pd.Series):
+        return normalized_text_values(value.tolist())
+    if hasattr(value, "tolist") and not isinstance(value, (str, bytes)):
+        try:
+            return normalized_text_values(value.tolist())
+        except TypeError:
+            pass
+    try:
+        if pd.isna(value):
+            return []
+    except (TypeError, ValueError):
+        pass
     text = str(value).strip()
+    return [text] if text else []
+
+
+def safe_text(value, default=""):
+    text_values = normalized_text_values(value)
+    if not text_values:
+        return default
+    text = "; ".join(text_values)
     return text if text else default
 
 
 def split_service_values(value):
-    if pd.isna(value):
-        return []
-    if isinstance(value, list):
-        items = value
-    else:
-        items = str(value).split(";")
-    return [item.strip() for item in items if str(item).strip()]
+    items = []
+    for raw_value in normalized_text_values(value):
+        items.extend(re.split(r"[;\n]+", raw_value))
+    return [item.strip() for item in items if item.strip()]
 
 
 def ensure_company_columns(company_df):
