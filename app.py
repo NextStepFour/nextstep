@@ -3321,21 +3321,28 @@ def page_auth():
     st.markdown(
         """
         <style>
+        [data-testid="stAppViewBlockContainer"] {
+            padding-top: 0.35rem;
+        }
         .landing-topbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            width: 100vw;
+            margin-left: calc(50% - 50vw);
+            margin-bottom: 0.35rem;
+            background: rgba(15, 23, 42, 0.96);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 1px 0 rgba(255,255,255,0.04);
+        }
+        .landing-topbar-inner {
+            max-width: 1220px;
+            margin: 0 auto;
+            padding: 1rem 1.2rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
-            margin-bottom: 1rem;
-            position: sticky;
-            top: 0.75rem;
-            z-index: 50;
-            padding: 0.7rem 0.9rem;
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 1rem;
-            background: rgba(15, 23, 42, 0.84);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 12px 34px rgba(15, 23, 42, 0.20);
         }
         .landing-brand {
             font-size: 1.32rem;
@@ -4125,8 +4132,10 @@ def page_auth():
                 padding: 0 0.8rem 2rem 0.8rem;
             }
             .landing-topbar {
-                padding: 0.72rem 0.8rem;
-                border-radius: 1.1rem;
+                margin-bottom: 0.15rem;
+            }
+            .landing-topbar-inner {
+                padding: 0.82rem 0.8rem;
             }
             .landing-brand {
                 font-size: 1.16rem;
@@ -4206,9 +4215,11 @@ def page_auth():
         st.markdown(
             f"""
             <div class="landing-topbar">
-                <div class="landing-brand">{APP_NAME}</div>
-                <div class="landing-nav-right">
-                    <a class="landing-topbar-cta" href="?auth=signup">Start Free</a>
+                <div class="landing-topbar-inner">
+                    <div class="landing-brand">{APP_NAME}</div>
+                    <div class="landing-nav-right">
+                        <a class="landing-topbar-cta" href="?auth=signup">Start Free</a>
+                    </div>
                 </div>
             </div>
             """,
