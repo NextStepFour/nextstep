@@ -2900,13 +2900,16 @@ def page_services():
 
                 if delete_id == service_id:
                     st.warning("Delete this service profile?")
-                    confirm_col1, confirm_col2 = st.columns(2)
-                    if confirm_col1.button("Confirm Delete", key=f"confirm_delete_service_{service_id}", use_container_width=True):
+                    with st.form(f"delete_service_form_{service_id}"):
+                        confirm_col1, confirm_col2 = st.columns(2)
+                        confirm_delete = confirm_col1.form_submit_button("Confirm Delete", use_container_width=True)
+                        cancel_delete = confirm_col2.form_submit_button("Cancel", use_container_width=True)
+                    if confirm_delete:
                         delete_service(service_id)
                         st.session_state.pop("service_delete_id", None)
                         st.success("Service profile deleted.")
                         st.rerun()
-                    if confirm_col2.button("Cancel", key=f"cancel_delete_service_{service_id}", use_container_width=True):
+                    if cancel_delete:
                         st.session_state.pop("service_delete_id", None)
                         st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
