@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import re
 import sqlite3
 import hashlib
 import hmac
@@ -126,6 +127,11 @@ DISPLAY_NAME_MAP = {
     "credits_used": "Credits Used",
     "created_at": "Created At",
     "estimated_search_time": "Actual Run Time",
+    "relevant_posting_count": "Relevant Posting Count",
+    "most_recent_posted_date": "Most Recent Posting Date",
+    "salary_signal": "Salary Signal",
+    "why_highlighted": "Why Highlighted",
+    "suggested_next_step": "Suggested Next Step",
     "target_location": "Target Location",
     "service_name": "Service Name",
     "service_description": "Service Description",
@@ -1441,6 +1447,186 @@ def format_short_date(value):
         return ""
 
 
+def build_master_evidence_data():
+    runs = runs_df()
+    if runs.empty:
+        return pd.DataFrame(columns=EVIDENCE_COLUMNS)
+
+    evidence_frames = []
+    for _, run_row in runs.iterrows():
+        run_record = get_run(run_row["id"])
+        if not run_record:
+            continue
+        evidence_df = ensure_evidence_columns(load_df(run_record["evidence_json"]))
+        if evidence_df.empty:
+            continue
+        evidence_df["source_run_id"] = run_record["id"]
+        evidence_df["source_run_created_at"] = run_record["created_at"]
+        evidence_df["source_services"] = run_record["services_text"]
+        evidence_frames.append(evidence_df)
+
+    if not evidence_frames:
+        return pd.DataFrame(columns=EVIDENCE_COLUMNS)
+
+    master_evidence_df = pd.concat(evidence_frames, ignore_index=True)
+    master_evidence_df = master_evidence_df.drop_duplicates(
+        subset=["source_url", "company_name", "job_title", "matched_service"],
+        keep="first",
+    ).reset_index(drop=True)
+    return master_evidence_df
+
+
+def parse_salary_high_value(salary_text):
+    if not salary_text or pd.isna(salary_text):
+        return None
+    cleaned = str(salary_text).replace(",", "")
+    matches = re.findall(r"\$?\s*(\d+(?:\.\d+)?)\s*([kK]?)", cleaned)
+    values = []
+    for raw_number, has_k in matches:
+        try:
+            number = float(raw_number)
+        except ValueError:
+            continue
+        if has_k:
+            number *= 1000
+        values.append(number)
+    if not values:
+        return None
+    return max(values)
+
+
+def build_next_steps_company_table(evidence_df):
+    if evidence_df.empty:
+        return pd.DataFrame()
+
+    temp = ensure_evidence_columns(evidence_df).copy()
+    temp["posted_date_parsed"] = pd.to_datetime(temp["posted_date"], errors="coerce")
+    rows = []
+    now_ts = pd.Timestamp.now().normalize()
+
+    for company, group in temp.groupby("company_name", dropna=False):
+        job_rows = group.drop_duplicates(subset=["source_url", "job_title"], keep="first").copy()
+        posting_count = len(job_rows)
+        if posting_count == 0:
+            continue
+
+        matched_services = flatten_unique(group["matched_service"].tolist())
+        likely_buyer_department = (
+            pd.Series([x for x in group["buyer_department"] if pd.notna(x) and str(x).strip()]).mode().iloc[0]
+            if any(pd.notna(group["buyer_department"]))
+            else None
+        )
+        source_urls = flatten_unique(group["source_url"].tolist())[:5]
+        salary_values = flatten_unique(group["base_salary"].tolist())
+        salary_numeric_values = [value for value in [parse_salary_high_value(s) for s in salary_values] if value is not None]
+        salary_signal = salary_values[0] if salary_values else None
+
+        recent_dates = job_rows["posted_date_parsed"].dropna()
+        most_recent_posted = recent_dates.max() if not recent_dates.empty else pd.NaT
+        if pd.notna(most_recent_posted):
+            age_days = max(0, (now_ts - most_recent_posted.normalize()).days)
+            if age_days <= 7:
+                recency_points = 35
+            elif age_days <= 14:
+                recency_points = 28
+            elif age_days <= 30:
+                recency_points = 20
+            elif age_days <= 60:
+                recency_points = 12
+            else:
+                recency_points = 6
+            most_recent_posted_text = most_recent_posted.strftime("%m/%d/%y")
+        else:
+            recency_points = 0
+            most_recent_posted_text = "Unknown"
+
+        posting_points = min(posting_count, 5) * 14
+        service_points = min(len(matched_services), 3) * 5
+        salary_points = 0
+        if salary_values:
+            salary_points += 8
+        highest_salary = max(salary_numeric_values) if salary_numeric_values else None
+        if highest_salary is not None:
+            if highest_salary >= 150000:
+                salary_points += 10
+            elif highest_salary >= 100000:
+                salary_points += 7
+            elif highest_salary >= 70000:
+                salary_points += 4
+            else:
+                salary_points += 2
+
+        priority_score = posting_points + recency_points + salary_points + service_points
+
+        why_parts = [
+            f"{posting_count} relevant posting{'s' if posting_count != 1 else ''} found",
+        ]
+        if most_recent_posted_text != "Unknown":
+            why_parts.append(f"most recent posting dated {most_recent_posted_text}")
+        if salary_signal:
+            why_parts.append(f"explicit base salary disclosed ({salary_signal})")
+
+        suggested_next_step = (
+            f"Prioritize outreach to the {likely_buyer_department} team and reference the matching postings."
+            if likely_buyer_department
+            else "Prioritize outreach to the team responsible for this function and reference the matching postings."
+        )
+
+        rows.append(
+            {
+                "buyer_company": safe_text(company, "Unknown Company"),
+                "relevant_posting_count": posting_count,
+                "most_recent_posted_date": most_recent_posted_text,
+                "salary_signal": salary_signal or "Not disclosed",
+                "matched_services": "; ".join(matched_services),
+                "likely_buyer_department_general": likely_buyer_department,
+                "why_highlighted": ". ".join(why_parts) + ".",
+                "suggested_next_step": suggested_next_step,
+                "source_urls": " | ".join(source_urls),
+                "_priority_score": priority_score,
+            }
+        )
+
+    if not rows:
+        return pd.DataFrame()
+
+    return pd.DataFrame(rows).sort_values(
+        ["_priority_score", "relevant_posting_count", "buyer_company"],
+        ascending=[False, False, True],
+    ).reset_index(drop=True)
+
+
+def build_next_steps_summary(top_df, all_df):
+    total_companies = len(all_df)
+    multiple_postings = int((all_df["relevant_posting_count"] >= 2).sum()) if not all_df.empty else 0
+    salary_disclosed = int((all_df["salary_signal"] != "Not disclosed").sum()) if not all_df.empty else 0
+    freshest_date = (
+        next((value for value in all_df["most_recent_posted_date"].tolist() if value and value != "Unknown"), "Unknown")
+        if not all_df.empty
+        else "Unknown"
+    )
+
+    lines = [
+        f"Companies reviewed: {total_companies}.",
+        f"Companies with multiple relevant postings: {multiple_postings}.",
+        f"Companies with explicit base salary disclosed: {salary_disclosed}.",
+        f"Freshest posting date observed: {freshest_date}.",
+    ]
+
+    for _, row in top_df.iterrows():
+        lines.append(
+            (
+                f"{row['buyer_company']}: {row['relevant_posting_count']} relevant posting"
+                f"{'s' if row['relevant_posting_count'] != 1 else ''}; "
+                f"most recent posting date {row['most_recent_posted_date']}; "
+                f"salary signal {row['salary_signal']}; "
+                f"matched services {row['matched_services'] or 'None listed'}."
+            )
+        )
+
+    return lines
+
+
 def pdf_data(company_df, meta):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
@@ -2146,6 +2332,73 @@ def page_users():
     st.dataframe(pretty_df(display), use_container_width=True)
 
 
+def page_next_steps():
+    st.title("Next Steps")
+    master_evidence_df = build_master_evidence_data()
+    if master_evidence_df.empty:
+        st.info("Generate and save at least one list before using Next Steps.")
+        return
+
+    company_priority_df = build_next_steps_company_table(master_evidence_df)
+    if company_priority_df.empty:
+        st.info("No company priority analysis is available from the current saved evidence.")
+        return
+
+    top_company_count = min(5, len(company_priority_df))
+    top_companies_df = company_priority_df.head(top_company_count).copy()
+
+    stat1, stat2, stat3, stat4 = st.columns(4)
+    stat1.metric("Companies Reviewed", len(company_priority_df))
+    stat2.metric("Top Companies Highlighted", top_company_count)
+    stat3.metric("Multiple Posting Signals", int((company_priority_df["relevant_posting_count"] >= 2).sum()))
+    stat4.metric("Salary Disclosed", int((company_priority_df["salary_signal"] != "Not disclosed").sum()))
+
+    st.subheader("Priority Companies")
+    st.dataframe(
+        pretty_df(
+            top_companies_df[
+                [
+                    "buyer_company",
+                    "relevant_posting_count",
+                    "most_recent_posted_date",
+                    "salary_signal",
+                    "matched_services",
+                    "likely_buyer_department_general",
+                    "why_highlighted",
+                    "suggested_next_step",
+                    "source_urls",
+                ]
+            ]
+        ),
+        use_container_width=True,
+    )
+
+    st.download_button(
+        "Download top next steps as CSV",
+        data=csv_data(
+            top_companies_df[
+                [
+                    "buyer_company",
+                    "relevant_posting_count",
+                    "most_recent_posted_date",
+                    "salary_signal",
+                    "matched_services",
+                    "likely_buyer_department_general",
+                    "why_highlighted",
+                    "suggested_next_step",
+                    "source_urls",
+                ]
+            ]
+        ),
+        file_name="nextstepsignal_next_steps.csv",
+        mime="text/csv",
+    )
+
+    st.subheader("Analysis")
+    for line in build_next_steps_summary(top_companies_df, company_priority_df):
+        st.write(line)
+
+
 def page_potential_expansions():
     st.title("Potential Expansions")
     st.write(
@@ -2287,6 +2540,7 @@ else:
             "▣  Service Profiles",
             "➜  Generate List",
             "☰  Saved Lists",
+            "➤  Next Steps",
             "✦  Potential Expansions",
         ]
         if is_admin_user(user):
@@ -2311,6 +2565,8 @@ else:
         page_services()
     elif page == "➜  Generate List":
         page_generate()
+    elif page == "➤  Next Steps":
+        page_next_steps()
     elif page == "✦  Potential Expansions":
         page_potential_expansions()
     elif page == "⚙  Users" and is_admin_user(user):
