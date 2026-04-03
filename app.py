@@ -159,7 +159,11 @@ DISPLAY_NAME_MAP = {
     "source_services": "Source Services",
 }
 
-st.set_page_config(page_title=APP_NAME, layout="wide")
+st.set_page_config(
+    page_title=APP_NAME,
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 
 def inject_global_styles():
