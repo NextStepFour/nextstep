@@ -3429,7 +3429,7 @@ def page_auth():
             display: grid;
             grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
             gap: 1.35rem;
-            align-items: center;
+            align-items: start;
             min-height: calc(100vh - 10rem);
             padding: 2.4rem 0 2rem 0;
         }
@@ -3438,8 +3438,8 @@ def page_auth():
             min-height: 520px;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            padding: 0.35rem 0 0.35rem 0;
+            justify-content: flex-start;
+            padding: 4.4rem 0 0.35rem 0;
         }
         .landing-band {
             border: 1px solid rgba(255,255,255,0.08);
@@ -3625,7 +3625,7 @@ def page_auth():
             padding: 0;
             overflow: hidden;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
         }
         .hero-clean-shell {
             position: relative;
