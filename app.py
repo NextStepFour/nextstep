@@ -1696,6 +1696,94 @@ def choose_display_company_name(names):
     return ranked[0][0]
 
 
+def keyword_tokens(*values):
+    tokens = set()
+    for value in values:
+        if isinstance(value, list):
+            items = value
+        else:
+            items = [value]
+        for item in items:
+            text = safe_text(item).lower()
+            if not text:
+                continue
+            for token in re.findall(r"[a-z0-9]+", text):
+                if len(token) >= 4:
+                    tokens.add(token)
+    return tokens
+
+
+def build_expansion_company_views(expansion_row, evidence_df):
+    if evidence_df.empty:
+        return []
+
+    working = ensure_evidence_columns(evidence_df).copy()
+    working["canonical_company_name"] = working["company_name"].apply(canonicalize_company_name)
+    candidate_companies = split_service_values(expansion_row.get("companies_showing_interest"))
+    candidate_canonicals = {canonicalize_company_name(name) for name in candidate_companies if safe_text(name)}
+    sample_titles = split_service_values(expansion_row.get("sample_job_titles"))
+    title_tokens = keyword_tokens(sample_titles)
+    expansion_tokens = keyword_tokens(
+        expansion_row.get("suggested_service"),
+        expansion_row.get("service_description"),
+        expansion_row.get("sample_responsibilities"),
+    )
+
+    company_views = []
+    for candidate in candidate_companies:
+        candidate_canonical = canonicalize_company_name(candidate)
+        company_df = working[working["canonical_company_name"] == candidate_canonical].copy()
+        if company_df.empty:
+            continue
+
+        scored_rows = []
+        for _, row in company_df.iterrows():
+            title = safe_text(row.get("job_title"))
+            row_tokens = keyword_tokens(
+                row.get("job_title"),
+                row.get("likely_service_need"),
+                row.get("matching_keywords"),
+                row.get("matching_responsibilities"),
+            )
+            title_match = 1 if safe_text(title) in sample_titles else 0
+            token_overlap = len(row_tokens & (title_tokens | expansion_tokens))
+            direct_bucket = 2 if safe_text(row.get("match_type")) in {"Direct", "Peripheral"} else 0
+            score = (title_match * 4) + token_overlap + direct_bucket
+            if score <= 0:
+                continue
+            scored_rows.append((score, row))
+
+        if not scored_rows:
+            scored_rows = [(1, row) for _, row in company_df.iterrows()]
+
+        scored_rows.sort(
+            key=lambda item: (
+                -item[0],
+                safe_text(item[1].get("posted_date"), ""),
+                safe_text(item[1].get("job_title"), "").lower(),
+            )
+        )
+        selected_rows = [item[1] for item in scored_rows[:5]]
+        selected_df = pd.DataFrame(selected_rows).drop_duplicates(subset=["source_url", "job_title"], keep="first")
+        selected_df = selected_df.sort_values(["posted_date", "match_score"], ascending=[False, False]).reset_index(drop=True)
+        if selected_df.empty:
+            continue
+
+        recent_dates = pd.to_datetime(selected_df["posted_date"], errors="coerce").dropna()
+        most_recent = recent_dates.max().strftime("%m/%d/%y") if not recent_dates.empty else "Unknown"
+        company_views.append(
+            {
+                "company_name": choose_display_company_name(selected_df["company_name"].tolist()),
+                "posting_count": len(selected_df),
+                "most_recent_posted_date": most_recent,
+                "jobs": selected_df.to_dict(orient="records"),
+            }
+        )
+
+    company_views.sort(key=lambda item: (-item["posting_count"], item["most_recent_posted_date"] == "Unknown", item["company_name"].lower()))
+    return company_views
+
+
 def build_master_evidence_data():
     runs = runs_df()
     if runs.empty:
@@ -3225,6 +3313,31 @@ def page_potential_expansions():
                     color: #dbeafe;
                     line-height: 1.58;
                 }
+                .expansion-company-box {
+                    border: 1px solid rgba(255,255,255,0.08);
+                    border-radius: 0.95rem;
+                    background: rgba(15, 23, 42, 0.36);
+                    padding: 0.9rem 1rem;
+                    margin-bottom: 0.8rem;
+                }
+                .expansion-company-title {
+                    font-size: 1rem;
+                    font-weight: 750;
+                    color: #eff6ff;
+                    margin-bottom: 0.25rem;
+                }
+                .expansion-company-meta {
+                    color: #cbd5e1;
+                    font-size: 0.9rem;
+                    line-height: 1.45;
+                    margin-bottom: 0.55rem;
+                }
+                .expansion-job-line {
+                    color: #dbeafe;
+                    line-height: 1.55;
+                    margin-bottom: 0.32rem;
+                    padding-left: 0.15rem;
+                }
                 @media (max-width: 900px) {
                     .expansion-summary-grid {
                         grid-template-columns: 1fr 1fr;
@@ -3296,16 +3409,38 @@ def page_potential_expansions():
 
             st.subheader("Expansion Reports")
             for idx, (_, row) in enumerate(display_expansion_df.iterrows(), start=1):
+                company_views = build_expansion_company_views(row, evidence_df)
                 with st.expander(
                     f"#{idx} {safe_text(row['suggested_service'], 'Unknown expansion')} | {safe_text(str(row['supporting_signal_count']), '0')} signals",
                     expanded=False,
                 ):
+                    company_cards_html = []
+                    for company_view in company_views:
+                        job_lines = []
+                        for job in company_view["jobs"]:
+                            job_title = escape(safe_text(job.get("job_title"), "Unknown job title"))
+                            salary = safe_text(job.get("base_salary"))
+                            posted = safe_text(job.get("posted_date"), "Unknown")
+                            job_line = f"{job_title}"
+                            if salary:
+                                job_line += f" | {escape(salary)}"
+                            job_line += f" | {escape(posted)}"
+                            job_lines.append(f'<div class="expansion-job-line">- {job_line}</div>')
+                        company_cards_html.append(
+                            '<div class="expansion-company-box">'
+                            f'<div class="expansion-company-title">{escape(company_view["company_name"])}</div>'
+                            f'<div class="expansion-company-meta">{company_view["posting_count"]} related posting{"s" if int(company_view["posting_count"]) != 1 else ""} | Most recent: {escape(company_view["most_recent_posted_date"])}</div>'
+                            + "".join(job_lines)
+                            + '</div>'
+                        )
+
                     st.markdown(
                         (
                             '<div class="expansion-card">'
                             f'<div class="expansion-card-title">{escape(safe_text(row["suggested_service"], "Unknown expansion"))}</div>'
                             f'<div class="expansion-card-section"><div class="expansion-card-label">Service Description</div><div class="expansion-card-value">{escape(safe_text(row["service_description"], "No service description captured."))}</div></div>'
                             f'<div class="expansion-card-section"><div class="expansion-card-label">Companies Showing Interest</div><div class="expansion-card-value">{escape(safe_text(row["companies_showing_interest"], "No companies captured."))}</div></div>'
+                            f'<div class="expansion-card-section"><div class="expansion-card-label">Pattern By Company</div><div class="expansion-card-value">{"".join(company_cards_html) if company_cards_html else "No company-specific posting pattern could be mapped from the current evidence."}</div></div>'
                             f'<div class="expansion-card-section"><div class="expansion-card-label">Typical Job Titles / Responsibilities Seen</div><div class="expansion-card-value"><strong>Job Titles:</strong> {escape(safe_text(row["sample_job_titles"], "No job titles captured."))}<br><strong>Responsibilities:</strong> {escape(safe_text(row["sample_responsibilities"], "No responsibilities captured."))}</div></div>'
                             '</div>'
                         ),
