@@ -3309,7 +3309,6 @@ def render_landing_signup_capture():
             type="primary",
             use_container_width=True,
         )
-    st.caption("Use your email to begin account setup and move straight into account creation.")
     st.markdown("</div>", unsafe_allow_html=True)
 
     if start_free:
@@ -3424,6 +3423,11 @@ def page_auth():
             max-width: 1140px;
             margin: 0 auto;
         }
+        .landing-hero-simple {
+            max-width: 760px;
+            padding: 3.2rem 0 2rem 0;
+            margin-bottom: 1.2rem;
+        }
         .landing-band {
             border: 1px solid rgba(255,255,255,0.08);
             border-radius: 1.2rem;
@@ -3463,7 +3467,7 @@ def page_auth():
             font-weight: 850;
             color: #eff6ff;
             margin-bottom: 0.9rem;
-            max-width: 12ch;
+            max-width: 14ch;
         }
         .landing-subtitle {
             color: #cbd5e1;
@@ -3515,12 +3519,34 @@ def page_auth():
             margin-bottom: 0.8rem;
         }
         .landing-signup-shell {
-            max-width: 700px;
-            margin-top: 0.35rem;
-            margin-bottom: 0.9rem;
+            max-width: 720px;
+            margin-top: 0.55rem;
+            margin-bottom: 0.25rem;
+            padding: 0.3rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
         }
         .landing-signup-button-pad {
-            height: 0.1rem;
+            height: 0.22rem;
+        }
+        .landing-signup-shell [data-testid="stTextInput"] > div > div {
+            background: rgba(255,255,255,0.96);
+            border-radius: 999px;
+        }
+        .landing-signup-shell input {
+            color: #0f172a !important;
+        }
+        .landing-signup-shell [data-testid="stButton"] button {
+            min-height: 3.4rem;
+            border-radius: 999px;
+            font-size: 1.02rem;
+            font-weight: 750;
+        }
+        .landing-search-note {
+            color: #94a3b8;
+            font-size: 0.88rem;
+            margin-top: 0.55rem;
         }
         .landing-anchor-button {
             display: inline-flex;
@@ -3922,29 +3948,15 @@ def page_auth():
             """,
             unsafe_allow_html=True,
         )
-        hero_left, hero_right = st.columns([1.05, 1.0], gap="large")
-        with hero_left:
-            st.markdown('<div class="landing-kicker">Market intelligence for service growth</div>', unsafe_allow_html=True)
-            st.markdown('<div class="landing-title">Turn public market signals into your next client opportunities</div>', unsafe_allow_html=True)
-            st.markdown(
-                '<div class="landing-subtitle">Find buyer demand. Rank opportunities. Spot service gaps.</div>',
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                '<div class="landing-support">A cleaner way to turn public signals into action.</div>',
-                unsafe_allow_html=True,
-            )
-            render_landing_signup_capture()
-            st.markdown(
-                """
-                <div class="landing-anchor-row">
-                    <a class="landing-anchor-button secondary" href="#how-it-works">See How It Works</a>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with hero_right:
-            st.markdown(landing_marketing_mockup_html("hero"), unsafe_allow_html=True)
+        st.markdown('<div class="landing-hero-simple">', unsafe_allow_html=True)
+        st.markdown('<div class="landing-title">Turn public market signals into your next opportunities</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="landing-subtitle">Find buyer demand. Rank opportunities. Spot service gaps.</div>',
+            unsafe_allow_html=True,
+        )
+        render_landing_signup_capture()
+        st.markdown('<div class="landing-search-note">Enter your email to start free.</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown(
             """
