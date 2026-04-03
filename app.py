@@ -4219,7 +4219,6 @@ def page_auth():
         """,
         unsafe_allow_html=True,
     )
-    st.markdown('<div class="landing-wrap">', unsafe_allow_html=True)
     if reset_token:
         left, right = st.columns([1.02, 1.18], gap="large")
         with left:
@@ -4301,9 +4300,6 @@ def page_auth():
             """,
             unsafe_allow_html=True,
         )
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
 
 def page_billing(user):
     st.title("Plans & Billing")
