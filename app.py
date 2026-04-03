@@ -3355,7 +3355,7 @@ def page_auth():
             gap: 1rem;
         }
         .landing-brand {
-            font-size: 1.32rem;
+            font-size: 1.5rem;
             font-weight: 850;
             color: #eff6ff;
             letter-spacing: -0.02em;
@@ -3439,18 +3439,18 @@ def page_auth():
         .landing-page {
             max-width: 1280px;
             margin: 0 auto;
-            padding: 128px 1.8rem 2.5rem 1.8rem;
+            padding: 102px 1.8rem 2.5rem 1.8rem;
         }
         .landing-hero-shell {
             display: grid;
             grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
             gap: 3rem;
             align-items: start;
-            min-height: 640px;
+            min-height: 560px;
         }
         .landing-copy {
             max-width: 40rem;
-            padding-top: 4.4rem;
+            padding-top: 1.1rem;
         }
         .landing-band {
             border: 1px solid rgba(255,255,255,0.08);
@@ -3651,22 +3651,22 @@ def page_auth():
         }
         .landing-mockup-wrap {
             position: relative;
-            min-height: 620px;
+            min-height: 540px;
             padding: 0;
             overflow: hidden;
             display: flex;
             align-items: flex-start;
         }
         .landing-hero-visual {
-            min-height: 620px;
+            min-height: 540px;
             display: flex;
             align-items: flex-start;
             justify-content: flex-start;
-            padding-top: 1.15rem;
+            padding-top: 0.9rem;
         }
         .hero-clean-shell {
             position: relative;
-            min-height: 620px;
+            min-height: 540px;
             width: 100%;
             border-radius: 2rem;
             background:
@@ -4123,7 +4123,7 @@ def page_auth():
         }
         @media (max-width: 1100px) {
             .landing-page {
-                padding-top: 108px;
+                padding-top: 92px;
             }
             .landing-hero-shell {
                 grid-template-columns: 1fr;
@@ -4173,14 +4173,14 @@ def page_auth():
                 padding: 0 0.95rem;
             }
             .landing-brand {
-                font-size: 1.16rem;
+                font-size: 1.28rem;
             }
             .landing-topbar-cta {
                 min-width: 136px;
                 padding: 0.78rem 1rem;
             }
             .landing-page {
-                padding: 98px 0.95rem 1.8rem 0.95rem;
+                padding: 86px 0.95rem 1.8rem 0.95rem;
             }
             .landing-title {
                 font-size: clamp(2.65rem, 12vw, 3.9rem);
