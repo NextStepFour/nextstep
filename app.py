@@ -1627,6 +1627,48 @@ def build_next_steps_summary(top_df, all_df):
     return lines
 
 
+def build_company_next_steps_description(company_row, company_evidence_df):
+    salary_disclosed_count = int(company_evidence_df["base_salary"].fillna("").astype(str).str.strip().ne("").sum())
+    description_parts = [
+        f"{company_row['relevant_posting_count']} tracked posting{'s' if company_row['relevant_posting_count'] != 1 else ''}",
+    ]
+    if company_row["most_recent_posted_date"] != "Unknown":
+        description_parts.append(f"most recent posting date {company_row['most_recent_posted_date']}")
+    if salary_disclosed_count:
+        description_parts.append(f"{salary_disclosed_count} posting{'s' if salary_disclosed_count != 1 else ''} with explicit base salary")
+    if company_row["likely_buyer_department_general"]:
+        description_parts.append(f"likely buyer department {company_row['likely_buyer_department_general']}")
+    if company_row["matched_services"]:
+        description_parts.append(f"matched services {company_row['matched_services']}")
+    return ". ".join(description_parts) + "."
+
+
+def render_next_steps_job_block(job_row):
+    why_matches = flatten_unique(job_row.get("why_it_matches", []))
+    why_text = "; ".join(why_matches) if why_matches else "No additional evidence notes captured."
+    responsibilities = flatten_unique(job_row.get("matching_responsibilities", []))
+    responsibilities_text = "; ".join(responsibilities) if responsibilities else "None captured."
+    source_url = safe_text(job_row.get("source_url"))
+    source_line = f"[Open source posting]({source_url})" if source_url else "No source URL saved."
+
+    st.markdown(
+        (
+            '<div style="border:1px solid rgba(255,255,255,0.08); border-radius:0.9rem; padding:0.85rem 0.95rem; '
+            'background:rgba(255,255,255,0.02); margin-bottom:0.7rem;">'
+            f'<div style="font-size:1rem; font-weight:700; color:#eff6ff; margin-bottom:0.35rem;">{escape(safe_text(job_row.get("job_title"), "Unknown job title"))}</div>'
+            f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Base Salary:</strong> {escape(safe_text(job_row.get("base_salary"), "Not disclosed"))}</div>'
+            f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Posted Date:</strong> {escape(safe_text(job_row.get("posted_date"), "Unknown"))}</div>'
+            f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Match Type:</strong> {escape(safe_text(job_row.get("match_type"), "Unknown"))}</div>'
+            f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Likely Service Need:</strong> {escape(safe_text(job_row.get("likely_service_need"), "Not specified"))}</div>'
+            f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Evidence:</strong> {escape(why_text)}</div>'
+            f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Relevant Responsibilities:</strong> {escape(responsibilities_text)}</div>'
+            '</div>'
+        ),
+        unsafe_allow_html=True,
+    )
+    st.markdown(source_line)
+
+
 def pdf_data(company_df, meta):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
@@ -2344,6 +2386,42 @@ def page_next_steps():
         st.info("No company priority analysis is available from the current saved evidence.")
         return
 
+    st.markdown(
+        """
+        <style>
+        .nextsteps-company-box {
+            border: 1px solid var(--brand-border);
+            border-radius: 1rem;
+            padding: 1rem 1rem 0.9rem 1rem;
+            background: rgba(96, 165, 250, 0.05);
+            margin-bottom: 1rem;
+        }
+        .nextsteps-company-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #eff6ff;
+            margin-bottom: 0.45rem;
+        }
+        .nextsteps-section-label {
+            display: inline-block;
+            background: rgba(96, 165, 250, 0.16);
+            color: #dbeafe;
+            padding: 0.32rem 0.55rem;
+            border-radius: 0.45rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        .nextsteps-company-copy {
+            color: #cbd5e1;
+            line-height: 1.55;
+            margin-bottom: 0.8rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     top_company_count = min(5, len(company_priority_df))
     top_companies_df = company_priority_df.head(top_company_count).copy()
 
@@ -2352,26 +2430,6 @@ def page_next_steps():
     stat2.metric("Top Companies Highlighted", top_company_count)
     stat3.metric("Multiple Posting Signals", int((company_priority_df["relevant_posting_count"] >= 2).sum()))
     stat4.metric("Salary Disclosed", int((company_priority_df["salary_signal"] != "Not disclosed").sum()))
-
-    st.subheader("Priority Companies")
-    st.dataframe(
-        pretty_df(
-            top_companies_df[
-                [
-                    "buyer_company",
-                    "relevant_posting_count",
-                    "most_recent_posted_date",
-                    "salary_signal",
-                    "matched_services",
-                    "likely_buyer_department_general",
-                    "why_highlighted",
-                    "suggested_next_step",
-                    "source_urls",
-                ]
-            ]
-        ),
-        use_container_width=True,
-    )
 
     st.download_button(
         "Download top next steps as CSV",
@@ -2397,6 +2455,65 @@ def page_next_steps():
     st.subheader("Analysis")
     for line in build_next_steps_summary(top_companies_df, company_priority_df):
         st.write(line)
+
+    st.subheader("Priority Company Reports")
+    for _, company_row in top_companies_df.iterrows():
+        company_name = company_row["buyer_company"]
+        company_evidence_df = ensure_evidence_columns(
+            master_evidence_df[master_evidence_df["company_name"] == company_name].copy()
+        )
+        company_evidence_df = company_evidence_df.sort_values(
+            ["posted_date", "match_score"],
+            ascending=[False, False],
+        ).reset_index(drop=True)
+
+        relevant_jobs_df = company_evidence_df[
+            company_evidence_df["match_type"].isin(["Direct", "Peripheral"])
+        ].drop_duplicates(subset=["source_url", "job_title"], keep="first")
+        other_jobs_df = company_evidence_df[
+            company_evidence_df["match_type"].isin(["Weak"])
+        ].drop_duplicates(subset=["source_url", "job_title"], keep="first")
+
+        st.markdown('<div class="nextsteps-company-box">', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="nextsteps-company-title">Company Name: {escape(company_name)}</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="nextsteps-company-copy"><strong>Company Description:</strong> {escape(build_company_next_steps_description(company_row, company_evidence_df))}</div>',
+            unsafe_allow_html=True,
+        )
+
+        meta_left, meta_right = st.columns(2)
+        with meta_left:
+            st.markdown(
+                f"**Suggested Next Step:** {company_row['suggested_next_step']}"
+            )
+            st.markdown(
+                f"**Likely Buyer Department:** {company_row['likely_buyer_department_general'] or 'Unknown'}"
+            )
+        with meta_right:
+            st.markdown(
+                f"**Relevant Posting Count:** {company_row['relevant_posting_count']}"
+            )
+            st.markdown(
+                f"**Most Recent Posting Date:** {company_row['most_recent_posted_date']}"
+            )
+
+        st.markdown('<div class="nextsteps-section-label">Relevant Job Postings</div>', unsafe_allow_html=True)
+        if relevant_jobs_df.empty:
+            st.write("No Direct or Peripheral postings available for this company.")
+        else:
+            for _, job_row in relevant_jobs_df.iterrows():
+                render_next_steps_job_block(job_row)
+
+        st.markdown('<div class="nextsteps-section-label">Other Related Job Postings</div>', unsafe_allow_html=True)
+        if other_jobs_df.empty:
+            st.write("No additional Weak postings available for this company.")
+        else:
+            for _, job_row in other_jobs_df.iterrows():
+                render_next_steps_job_block(job_row)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def page_potential_expansions():
