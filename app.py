@@ -1009,14 +1009,22 @@ def delete_service(service_id, user_id=None):
 def build_service_option_map(svc_df):
     if svc_df.empty:
         return {}
-    working = svc_df.copy()
-    working["_created_at_sort"] = pd.to_datetime(working["created_at"], errors="coerce")
-    working = working.sort_values(["_created_at_sort", "id"], ascending=[True, True]).reset_index(drop=True)
-    working["service_number"] = range(1, len(working) + 1)
+    working = prepare_service_map_df(svc_df)
     return {
         f"#{int(row['service_number'])} | {safe_text(row.get('service_category'), 'General')} | {safe_text(row['service_name'], 'Untitled Service')}": row
         for _, row in working.iterrows()
     }
+
+
+def prepare_service_map_df(svc_df):
+    if svc_df.empty:
+        return pd.DataFrame()
+    working = svc_df.copy()
+    working["service_category"] = working["service_category"].fillna("General").replace("", "General")
+    working["_created_at_sort"] = pd.to_datetime(working["created_at"], errors="coerce")
+    working = working.sort_values(["service_category", "_created_at_sort", "id"], ascending=[True, True, True]).reset_index(drop=True)
+    working["service_number"] = working.groupby("service_category").cumcount() + 1
+    return working
 
 
 def save_run(
@@ -2878,11 +2886,7 @@ def page_services():
             unsafe_allow_html=True,
         )
 
-        svc = svc.copy()
-        svc["_created_at_sort"] = pd.to_datetime(svc["created_at"], errors="coerce")
-        svc = svc.sort_values(["_created_at_sort", "id"], ascending=[True, True]).reset_index(drop=True)
-        svc["service_number"] = range(1, len(svc) + 1)
-        svc["service_category"] = svc["service_category"].fillna("General").replace("", "General")
+        svc = prepare_service_map_df(svc)
 
         rename_id = st.session_state.get("service_rename_id")
         delete_id = st.session_state.get("service_delete_id")
@@ -3533,8 +3537,88 @@ def page_potential_expansions():
         st.info("Create service profiles first.")
         return
 
+    svc = prepare_service_map_df(svc)
     options = build_service_option_map(svc)
     selected = st.multiselect("Select 3 or more services", list(options.keys()))
+    if selected:
+        st.markdown(
+            """
+            <style>
+            .exp-service-map-wrap {
+                max-width: 1080px;
+                margin: 0 auto 1rem auto;
+            }
+            .exp-service-category-box {
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 0.95rem;
+                background: rgba(15, 23, 42, 0.34);
+                padding: 0.9rem 1rem 1rem 1rem;
+                margin-bottom: 0.9rem;
+            }
+            .exp-service-category-title {
+                font-size: 1rem;
+                font-weight: 800;
+                color: #eff6ff;
+                margin-bottom: 0.2rem;
+            }
+            .exp-service-category-subtitle {
+                color: #cbd5e1;
+                margin-bottom: 0.8rem;
+                line-height: 1.45;
+            }
+            .exp-service-chip-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.7rem;
+            }
+            .exp-service-chip {
+                border: 1px solid var(--brand-border);
+                border-radius: 0.85rem;
+                background: rgba(96, 165, 250, 0.08);
+                color: #dbeafe;
+                padding: 0.72rem 0.85rem;
+                font-weight: 700;
+                line-height: 1.4;
+                min-height: 60px;
+                display: flex;
+                align-items: center;
+            }
+            @media (max-width: 900px) {
+                .exp-service-chip-grid {
+                    grid-template-columns: 1fr 1fr;
+                }
+            }
+            @media (max-width: 640px) {
+                .exp-service-chip-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        selected_rows_preview = pd.DataFrame([options[label] for label in selected]).copy()
+        selected_rows_preview = prepare_service_map_df(selected_rows_preview)
+        st.markdown('<div class="exp-service-map-wrap">', unsafe_allow_html=True)
+        st.markdown("**Selected Service Map**")
+        for category_name, category_df in selected_rows_preview.groupby("service_category", sort=False):
+            chips_html = "".join(
+                [
+                    f'<div class="exp-service-chip">#{int(row["service_number"])} | {escape(safe_text(row["service_category"], "General"))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
+                    for _, row in category_df.iterrows()
+                ]
+            )
+            st.markdown(
+                (
+                    '<div class="exp-service-category-box">'
+                    f'<div class="exp-service-category-title">{escape(safe_text(category_name, "General"))}</div>'
+                    f'<div class="exp-service-category-subtitle">{len(category_df)} selected service{"s" if len(category_df) != 1 else ""} in this category.</div>'
+                    f'<div class="exp-service-chip-grid">{chips_html}</div>'
+                    '</div>'
+                ),
+                unsafe_allow_html=True,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
     st.caption("Default mode uses the saved evidence already collected in your account. This is faster and more tailored to your service set.")
     run_broader_validation = st.checkbox(
         "Broaden with fresh market validation",
