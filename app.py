@@ -1913,6 +1913,236 @@ def build_expansion_company_views(expansion_row, evidence_df):
     return company_views
 
 
+def latest_expansion_run_record(user_id=None):
+    runs = expansion_runs_df(user_id)
+    if runs.empty:
+        return None
+    return dict(runs.iloc[0])
+
+
+def render_potential_expansions_report(
+    expansion_df,
+    evidence_df,
+    services_text,
+    location_filter,
+    time_window,
+    mode_text,
+    created_at,
+    service_count,
+    key_suffix="current",
+):
+    display_expansion_df = format_lists_for_display(expansion_df)
+    evidence_df = format_lists_for_display(evidence_df)
+
+    st.markdown(
+        """
+        <style>
+        .expansion-wrap {
+            max-width: 1080px;
+            margin: 0 auto;
+        }
+        .expansion-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.8rem;
+            margin-bottom: 1rem;
+        }
+        .expansion-summary-card {
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 0.95rem;
+            background: rgba(15, 23, 42, 0.42);
+            padding: 0.9rem 1rem;
+        }
+        .expansion-summary-label {
+            font-size: 0.76rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #93c5fd;
+            margin-bottom: 0.35rem;
+        }
+        .expansion-summary-value {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: #eff6ff;
+            line-height: 1.15;
+        }
+        .expansion-summary-subvalue {
+            margin-top: 0.3rem;
+            color: #cbd5e1;
+            font-size: 0.88rem;
+            line-height: 1.45;
+        }
+        .expansion-card {
+            border: 1px solid var(--brand-border);
+            border-radius: 1rem;
+            padding: 1.1rem 1.1rem 0.95rem 1.1rem;
+            background: linear-gradient(180deg, rgba(96, 165, 250, 0.08), rgba(255,255,255,0.02));
+            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+            margin-bottom: 1rem;
+        }
+        .expansion-card-title {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #eff6ff;
+            margin-bottom: 0.7rem;
+        }
+        .expansion-card-section {
+            margin-bottom: 0.85rem;
+        }
+        .expansion-card-label {
+            font-size: 0.76rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #93c5fd;
+            margin-bottom: 0.22rem;
+        }
+        .expansion-card-value {
+            color: #dbeafe;
+            line-height: 1.58;
+        }
+        .expansion-company-box {
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 0.95rem;
+            background: rgba(15, 23, 42, 0.36);
+            padding: 0.9rem 1rem;
+            margin-bottom: 0.8rem;
+        }
+        .expansion-company-title {
+            font-size: 1rem;
+            font-weight: 750;
+            color: #eff6ff;
+            margin-bottom: 0.25rem;
+        }
+        .expansion-company-meta {
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            line-height: 1.45;
+            margin-bottom: 0.55rem;
+        }
+        .expansion-job-line {
+            color: #dbeafe;
+            line-height: 1.55;
+            margin-bottom: 0.32rem;
+            padding-left: 0.15rem;
+        }
+        @media (max-width: 900px) {
+            .expansion-summary-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        @media (max-width: 640px) {
+            .expansion-summary-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    most_repeated_gap = safe_text(display_expansion_df.iloc[0]["suggested_service"]) if not display_expansion_df.empty else "Unknown"
+    st.markdown('<div class="expansion-wrap">', unsafe_allow_html=True)
+    st.caption(
+        f"Showing saved expansion analysis from {created_at} | {mode_text} | Services analyzed: {service_count}"
+    )
+    st.markdown(
+        (
+            '<div class="expansion-summary-grid">'
+            f'<div class="expansion-summary-card"><div class="expansion-summary-label">Expansion Gaps Found</div><div class="expansion-summary-value">{len(display_expansion_df)}</div><div class="expansion-summary-subvalue">Distinct service gaps identified from current market evidence.</div></div>'
+            f'<div class="expansion-summary-card"><div class="expansion-summary-label">Most Repeated Gap</div><div class="expansion-summary-value">{escape(most_repeated_gap)}</div><div class="expansion-summary-subvalue">The expansion idea appearing most often in the reviewed signals.</div></div>'
+            f'<div class="expansion-summary-card"><div class="expansion-summary-label">Services Analyzed</div><div class="expansion-summary-value">{int(service_count or 0)}</div><div class="expansion-summary-subvalue">Saved services included in this expansion review.</div></div>'
+            f'<div class="expansion-summary-card"><div class="expansion-summary-label">Market Signals Reviewed</div><div class="expansion-summary-value">{len(evidence_df)}</div><div class="expansion-summary-subvalue">Public postings and related signals used to generate the gaps below.</div></div>'
+            '</div>'
+        ),
+        unsafe_allow_html=True,
+    )
+
+    ranked_table_df = display_expansion_df[
+        [
+            "suggested_service",
+            "service_description",
+            "supporting_signal_count",
+            "companies_showing_interest",
+        ]
+    ].copy()
+    ranked_table_df.columns = [
+        "Suggested Expansion",
+        "Service Description",
+        "Frequency",
+        "Companies Showing Interest",
+    ]
+    st.markdown("**Top Expansion Opportunities**")
+    st.dataframe(pretty_df(ranked_table_df), use_container_width=True, hide_index=True)
+
+    st.download_button(
+        "Download potential expansions as CSV",
+        data=csv_data(ranked_table_df),
+        file_name="nextstepsignal_potential_expansions.csv",
+        mime="text/csv",
+        key=f"expansion_csv_{key_suffix}",
+    )
+    st.download_button(
+        "Download potential expansions as PDF",
+        data=expansion_pdf_data(
+            display_expansion_df,
+            {
+                "created_at": created_at,
+                "services_text": services_text,
+                "location_filter": location_filter,
+                "time_window": time_window,
+                "mode": mode_text,
+            },
+        ),
+        file_name="nextstepsignal_potential_expansions.pdf",
+        mime="application/pdf",
+        key=f"expansion_pdf_{key_suffix}",
+    )
+
+    st.subheader("Expansion Reports")
+    for idx, (_, row) in enumerate(display_expansion_df.iterrows(), start=1):
+        company_views = build_expansion_company_views(row, evidence_df)
+        with st.expander(
+            f"#{idx} {safe_text(row['suggested_service'], 'Unknown expansion')} | {safe_text(str(row['supporting_signal_count']), '0')} signals",
+            expanded=False,
+        ):
+            company_cards_html = []
+            for company_view in company_views:
+                job_lines = []
+                for job in company_view["jobs"]:
+                    job_title = escape(safe_text(job.get("job_title"), "Unknown job title"))
+                    salary = safe_text(job.get("base_salary"))
+                    posted = safe_text(job.get("posted_date"), "Unknown")
+                    job_line = f"{job_title}"
+                    if salary:
+                        job_line += f" | {escape(salary)}"
+                    job_line += f" | {escape(posted)}"
+                    job_lines.append(f'<div class="expansion-job-line">- {job_line}</div>')
+                company_cards_html.append(
+                    '<div class="expansion-company-box">'
+                    f'<div class="expansion-company-title">{escape(company_view["company_name"])}</div>'
+                    f'<div class="expansion-company-meta">{company_view["posting_count"]} related posting{"s" if int(company_view["posting_count"]) != 1 else ""} | Most recent: {escape(company_view["most_recent_posted_date"])}</div>'
+                    + "".join(job_lines)
+                    + '</div>'
+                )
+
+            st.markdown(
+                (
+                    '<div class="expansion-card">'
+                    f'<div class="expansion-card-title">{escape(safe_text(row["suggested_service"], "Unknown expansion"))}</div>'
+                    f'<div class="expansion-card-section"><div class="expansion-card-label">Service Description</div><div class="expansion-card-value">{escape(safe_text(row["service_description"], "No service description captured."))}</div></div>'
+                    f'<div class="expansion-card-section"><div class="expansion-card-label">Companies Showing Interest</div><div class="expansion-card-value">{escape(safe_text(row["companies_showing_interest"], "No companies captured."))}</div></div>'
+                    f'<div class="expansion-card-section"><div class="expansion-card-label">Pattern By Company</div><div class="expansion-card-value">{"".join(company_cards_html) if company_cards_html else "No company-specific posting pattern could be mapped from the current evidence."}</div></div>'
+                    f'<div class="expansion-card-section"><div class="expansion-card-label">Typical Job Titles / Responsibilities Seen</div><div class="expansion-card-value"><strong>Job Titles:</strong> {escape(safe_text(row["sample_job_titles"], "No job titles captured."))}<br><strong>Responsibilities:</strong> {escape(safe_text(row["sample_responsibilities"], "No responsibilities captured."))}</div></div>'
+                    '</div>'
+                ),
+                unsafe_allow_html=True,
+            )
+
+    with st.expander("Supporting evidence used for expansion analysis"):
+        st.dataframe(evidence_df, use_container_width=True, hide_index=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def build_master_evidence_data():
     runs = runs_df()
     expansion_runs = expansion_runs_df()
@@ -3735,6 +3965,7 @@ def page_potential_expansions():
     )
 
     generate_expansions_label = f"Generate Expansion Ideas ({credits_needed} credits)"
+    rendered_report = False
     if st.button(generate_expansions_label, type="primary"):
         if len(selected) < 3:
             st.error("Please select at least 3 saved services.")
@@ -3797,216 +4028,44 @@ def page_potential_expansions():
                 expansion_df=expansion_df,
             )
             remaining = add_credits(-credits_needed)
-            display_expansion_df = format_lists_for_display(expansion_df)
             st.success(f"Expansion analysis complete. Credits remaining: {remaining}")
-
-            st.markdown(
-                """
-                <style>
-                .expansion-wrap {
-                    max-width: 1080px;
-                    margin: 0 auto;
-                }
-                .expansion-summary-grid {
-                    display: grid;
-                    grid-template-columns: repeat(4, minmax(0, 1fr));
-                    gap: 0.8rem;
-                    margin-bottom: 1rem;
-                }
-                .expansion-summary-card {
-                    border: 1px solid rgba(255,255,255,0.08);
-                    border-radius: 0.95rem;
-                    background: rgba(15, 23, 42, 0.42);
-                    padding: 0.9rem 1rem;
-                }
-                .expansion-summary-label {
-                    font-size: 0.76rem;
-                    font-weight: 700;
-                    text-transform: uppercase;
-                    color: #93c5fd;
-                    margin-bottom: 0.35rem;
-                }
-                .expansion-summary-value {
-                    font-size: 1.3rem;
-                    font-weight: 800;
-                    color: #eff6ff;
-                    line-height: 1.15;
-                }
-                .expansion-summary-subvalue {
-                    margin-top: 0.3rem;
-                    color: #cbd5e1;
-                    font-size: 0.88rem;
-                    line-height: 1.45;
-                }
-                .expansion-card {
-                    border: 1px solid var(--brand-border);
-                    border-radius: 1rem;
-                    padding: 1.1rem 1.1rem 0.95rem 1.1rem;
-                    background: linear-gradient(180deg, rgba(96, 165, 250, 0.08), rgba(255,255,255,0.02));
-                    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
-                    margin-bottom: 1rem;
-                }
-                .expansion-card-title {
-                    font-size: 1.2rem;
-                    font-weight: 800;
-                    color: #eff6ff;
-                    margin-bottom: 0.7rem;
-                }
-                .expansion-card-section {
-                    margin-bottom: 0.85rem;
-                }
-                .expansion-card-label {
-                    font-size: 0.76rem;
-                    font-weight: 700;
-                    text-transform: uppercase;
-                    color: #93c5fd;
-                    margin-bottom: 0.22rem;
-                }
-                .expansion-card-value {
-                    color: #dbeafe;
-                    line-height: 1.58;
-                }
-                .expansion-company-box {
-                    border: 1px solid rgba(255,255,255,0.08);
-                    border-radius: 0.95rem;
-                    background: rgba(15, 23, 42, 0.36);
-                    padding: 0.9rem 1rem;
-                    margin-bottom: 0.8rem;
-                }
-                .expansion-company-title {
-                    font-size: 1rem;
-                    font-weight: 750;
-                    color: #eff6ff;
-                    margin-bottom: 0.25rem;
-                }
-                .expansion-company-meta {
-                    color: #cbd5e1;
-                    font-size: 0.9rem;
-                    line-height: 1.45;
-                    margin-bottom: 0.55rem;
-                }
-                .expansion-job-line {
-                    color: #dbeafe;
-                    line-height: 1.55;
-                    margin-bottom: 0.32rem;
-                    padding-left: 0.15rem;
-                }
-                @media (max-width: 900px) {
-                    .expansion-summary-grid {
-                        grid-template-columns: 1fr 1fr;
-                    }
-                }
-                @media (max-width: 640px) {
-                    .expansion-summary-grid {
-                        grid-template-columns: 1fr;
-                    }
-                }
-                </style>
-                """,
-                unsafe_allow_html=True,
+            render_potential_expansions_report(
+                expansion_df=expansion_df,
+                evidence_df=evidence_df,
+                services_text=services_text,
+                location_filter=location_filter if run_broader_validation else "Saved evidence baseline",
+                time_window=time_window if run_broader_validation else "Saved evidence baseline",
+                mode_text="High volume" if run_broader_validation and high_volume else ("Focused" if run_broader_validation else "Saved evidence baseline"),
+                created_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
+                service_count=len(selected_rows),
+                key_suffix="current",
             )
-
-            most_repeated_gap = safe_text(display_expansion_df.iloc[0]["suggested_service"]) if not display_expansion_df.empty else "Unknown"
-            st.markdown('<div class="expansion-wrap">', unsafe_allow_html=True)
-            st.markdown(
-                (
-                    '<div class="expansion-summary-grid">'
-                    f'<div class="expansion-summary-card"><div class="expansion-summary-label">Expansion Gaps Found</div><div class="expansion-summary-value">{len(display_expansion_df)}</div><div class="expansion-summary-subvalue">Distinct service gaps identified from current market evidence.</div></div>'
-                    f'<div class="expansion-summary-card"><div class="expansion-summary-label">Most Repeated Gap</div><div class="expansion-summary-value">{escape(most_repeated_gap)}</div><div class="expansion-summary-subvalue">The expansion idea appearing most often in the reviewed signals.</div></div>'
-                    f'<div class="expansion-summary-card"><div class="expansion-summary-label">Services Analyzed</div><div class="expansion-summary-value">{len(selected_rows)}</div><div class="expansion-summary-subvalue">Saved services included in this expansion review.</div></div>'
-                    f'<div class="expansion-summary-card"><div class="expansion-summary-label">Market Signals Reviewed</div><div class="expansion-summary-value">{len(evidence_df)}</div><div class="expansion-summary-subvalue">Public postings and related signals used to generate the gaps below.</div></div>'
-                    '</div>'
-                ),
-                unsafe_allow_html=True,
-            )
-
-            ranked_table_df = display_expansion_df[
-                [
-                    "suggested_service",
-                    "service_description",
-                    "supporting_signal_count",
-                    "companies_showing_interest",
-                ]
-            ].copy()
-            ranked_table_df.columns = [
-                "Suggested Expansion",
-                "Service Description",
-                "Frequency",
-                "Companies Showing Interest",
-            ]
-            st.markdown("**Top Expansion Opportunities**")
-            st.dataframe(pretty_df(ranked_table_df), use_container_width=True, hide_index=True)
-
-            st.download_button(
-                "Download potential expansions as CSV",
-                data=csv_data(ranked_table_df),
-                file_name="nextstepsignal_potential_expansions.csv",
-                mime="text/csv",
-            )
-            st.download_button(
-                "Download potential expansions as PDF",
-                data=expansion_pdf_data(
-                    display_expansion_df,
-                    {
-                        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "services_text": services_text,
-                        "location_filter": location_filter if run_broader_validation else "Saved evidence baseline",
-                        "time_window": time_window if run_broader_validation else "Saved evidence baseline",
-                        "mode": "High volume" if run_broader_validation and high_volume else ("Focused" if run_broader_validation else "Saved evidence baseline"),
-                    },
-                ),
-                file_name="nextstepsignal_potential_expansions.pdf",
-                mime="application/pdf",
-            )
-
-            st.subheader("Expansion Reports")
-            for idx, (_, row) in enumerate(display_expansion_df.iterrows(), start=1):
-                company_views = build_expansion_company_views(row, evidence_df)
-                with st.expander(
-                    f"#{idx} {safe_text(row['suggested_service'], 'Unknown expansion')} | {safe_text(str(row['supporting_signal_count']), '0')} signals",
-                    expanded=False,
-                ):
-                    company_cards_html = []
-                    for company_view in company_views:
-                        job_lines = []
-                        for job in company_view["jobs"]:
-                            job_title = escape(safe_text(job.get("job_title"), "Unknown job title"))
-                            salary = safe_text(job.get("base_salary"))
-                            posted = safe_text(job.get("posted_date"), "Unknown")
-                            job_line = f"{job_title}"
-                            if salary:
-                                job_line += f" | {escape(salary)}"
-                            job_line += f" | {escape(posted)}"
-                            job_lines.append(f'<div class="expansion-job-line">- {job_line}</div>')
-                        company_cards_html.append(
-                            '<div class="expansion-company-box">'
-                            f'<div class="expansion-company-title">{escape(company_view["company_name"])}</div>'
-                            f'<div class="expansion-company-meta">{company_view["posting_count"]} related posting{"s" if int(company_view["posting_count"]) != 1 else ""} | Most recent: {escape(company_view["most_recent_posted_date"])}</div>'
-                            + "".join(job_lines)
-                            + '</div>'
-                        )
-
-                    st.markdown(
-                        (
-                            '<div class="expansion-card">'
-                            f'<div class="expansion-card-title">{escape(safe_text(row["suggested_service"], "Unknown expansion"))}</div>'
-                            f'<div class="expansion-card-section"><div class="expansion-card-label">Service Description</div><div class="expansion-card-value">{escape(safe_text(row["service_description"], "No service description captured."))}</div></div>'
-                            f'<div class="expansion-card-section"><div class="expansion-card-label">Companies Showing Interest</div><div class="expansion-card-value">{escape(safe_text(row["companies_showing_interest"], "No companies captured."))}</div></div>'
-                            f'<div class="expansion-card-section"><div class="expansion-card-label">Pattern By Company</div><div class="expansion-card-value">{"".join(company_cards_html) if company_cards_html else "No company-specific posting pattern could be mapped from the current evidence."}</div></div>'
-                            f'<div class="expansion-card-section"><div class="expansion-card-label">Typical Job Titles / Responsibilities Seen</div><div class="expansion-card-value"><strong>Job Titles:</strong> {escape(safe_text(row["sample_job_titles"], "No job titles captured."))}<br><strong>Responsibilities:</strong> {escape(safe_text(row["sample_responsibilities"], "No responsibilities captured."))}</div></div>'
-                            '</div>'
-                        ),
-                        unsafe_allow_html=True,
-                    )
-
-            with st.expander("Supporting evidence used for expansion analysis"):
-                st.dataframe(format_lists_for_display(evidence_df), use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            rendered_report = True
 
         except ValueError as exc:
             st.error(str(exc))
         except Exception as exc:
             st.error(f"Something went wrong while generating potential expansions: {exc}")
+
+    if not rendered_report:
+        latest_run = latest_expansion_run_record()
+        if latest_run:
+            saved_expansion_df = load_df(latest_run.get("expansion_json"))
+            saved_evidence_df = ensure_evidence_columns(load_df(latest_run.get("evidence_json")))
+            if not saved_expansion_df.empty and not saved_evidence_df.empty:
+                render_potential_expansions_report(
+                    expansion_df=saved_expansion_df,
+                    evidence_df=saved_evidence_df,
+                    services_text=safe_text(latest_run.get("services_text")),
+                    location_filter=safe_text(latest_run.get("location_filter"), "Saved evidence baseline"),
+                    time_window=safe_text(latest_run.get("time_window"), "Saved evidence baseline"),
+                    mode_text="High volume"
+                    if int(latest_run.get("broader_validation") or 0) and int(latest_run.get("high_volume_mode") or 0)
+                    else ("Focused" if int(latest_run.get("broader_validation") or 0) else "Saved evidence baseline"),
+                    created_at=safe_text(latest_run.get("created_at"), "Unknown"),
+                    service_count=int(latest_run.get("service_count") or 0),
+                    key_suffix=f"saved_{int(latest_run.get('id') or 0)}",
+                )
 
 
 init_db()
