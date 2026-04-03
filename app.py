@@ -132,6 +132,7 @@ DISPLAY_NAME_MAP = {
     "why_highlighted": "Why Highlighted",
     "suggested_next_step": "Suggested Next Step",
     "target_location": "Target Location",
+    "service_category": "Service Category",
     "service_name": "Service Name",
     "service_description": "Service Description",
     "suggested_service": "Suggested Service",
@@ -728,6 +729,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS services (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
+                service_category TEXT NOT NULL DEFAULT 'General',
                 service_name TEXT NOT NULL,
                 service_description TEXT NOT NULL,
                 target_location TEXT NOT NULL,
@@ -770,6 +772,8 @@ def init_db():
         service_columns = [row["name"] for row in db.execute("PRAGMA table_info(services)").fetchall()]
         if "user_id" not in service_columns:
             db.execute("ALTER TABLE services ADD COLUMN user_id INTEGER")
+        if "service_category" not in service_columns:
+            db.execute("ALTER TABLE services ADD COLUMN service_category TEXT NOT NULL DEFAULT 'General'")
         search_columns = [row["name"] for row in db.execute("PRAGMA table_info(searches)").fetchall()]
         if "user_id" not in search_columns:
             db.execute("ALTER TABLE searches ADD COLUMN user_id INTEGER")
@@ -952,7 +956,7 @@ def delete_run(run_id, user_id=None):
         )
 
 
-def save_service(name, description, location_filter, user_id=None):
+def save_service(category, name, description, location_filter, user_id=None):
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user:
         raise ValueError("Please sign in to save service profiles.")
@@ -960,12 +964,13 @@ def save_service(name, description, location_filter, user_id=None):
         db.execute(
             """
             INSERT INTO services (
-                user_id, service_name, service_description, target_location,
+                user_id, service_category, service_name, service_description, target_location,
                 default_time_window, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user["id"],
+                category.strip() or "General",
                 name.strip(),
                 description.strip(),
                 location_filter.strip(),
@@ -999,6 +1004,19 @@ def delete_service(service_id, user_id=None):
             "DELETE FROM services WHERE id = ? AND user_id = ?",
             (int(service_id), user["id"]),
         )
+
+
+def build_service_option_map(svc_df):
+    if svc_df.empty:
+        return {}
+    working = svc_df.copy()
+    working["_created_at_sort"] = pd.to_datetime(working["created_at"], errors="coerce")
+    working = working.sort_values(["_created_at_sort", "id"], ascending=[True, True]).reset_index(drop=True)
+    working["service_number"] = range(1, len(working) + 1)
+    return {
+        f"#{int(row['service_number'])} | {safe_text(row.get('service_category'), 'General')} | {safe_text(row['service_name'], 'Untitled Service')}": row
+        for _, row in working.iterrows()
+    }
 
 
 def save_run(
@@ -2749,15 +2767,16 @@ def page_dashboard():
 def page_services():
     st.title("Service Profiles")
     with st.form("service_form"):
-        name = st.text_input("Service name")
+        category = st.text_input("Service Category", placeholder="Solar, Energy Storage, EV Charging")
+        name = st.text_input("Service")
         description = st.text_area("Service description", height=180, placeholder="Describe the service, scope, titles, and keywords.")
         location_filter = st.text_input("Default target location", value="Any U.S. location")
         submit = st.form_submit_button("Save service profile")
     if submit:
-        if not name.strip() or not description.strip():
-            st.error("Please enter both a service name and a service description.")
+        if not category.strip() or not name.strip() or not description.strip():
+            st.error("Please enter a service category, a service, and a service description.")
         else:
-            save_service(name, description, location_filter)
+            save_service(category, name, description, location_filter)
             st.success("Service profile saved.")
             st.rerun()
     svc = services_df()
@@ -2801,6 +2820,30 @@ def page_services():
                 margin-bottom: 0.55rem;
                 line-height: 1.3;
             }
+            .service-category-header {
+                margin: 0.4rem 0 0.9rem 0;
+                padding: 0.9rem 1rem;
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 0.95rem;
+                background: rgba(15, 23, 42, 0.34);
+            }
+            .service-category-title {
+                font-size: 1.08rem;
+                font-weight: 800;
+                color: #eff6ff;
+                margin-bottom: 0.2rem;
+            }
+            .service-category-subtitle {
+                color: #cbd5e1;
+                line-height: 1.45;
+            }
+            .service-tile-category {
+                font-size: 0.76rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                color: #93c5fd;
+                margin-bottom: 0.3rem;
+            }
             .service-tile-copy {
                 color: #dbeafe;
                 line-height: 1.55;
@@ -2839,79 +2882,91 @@ def page_services():
         svc["_created_at_sort"] = pd.to_datetime(svc["created_at"], errors="coerce")
         svc = svc.sort_values(["_created_at_sort", "id"], ascending=[True, True]).reset_index(drop=True)
         svc["service_number"] = range(1, len(svc) + 1)
+        svc["service_category"] = svc["service_category"].fillna("General").replace("", "General")
 
         rename_id = st.session_state.get("service_rename_id")
         delete_id = st.session_state.get("service_delete_id")
-        tile_columns = st.columns(3)
+        for category_name, category_df in svc.groupby("service_category", sort=False):
+            st.markdown(
+                (
+                    '<div class="service-category-header">'
+                    f'<div class="service-category-title">{escape(safe_text(category_name, "General"))}</div>'
+                    f'<div class="service-category-subtitle">{len(category_df)} service{"s" if len(category_df) != 1 else ""} in this category.</div>'
+                    '</div>'
+                ),
+                unsafe_allow_html=True,
+            )
+            tile_columns = st.columns(3)
 
-        for idx, (_, row) in enumerate(svc.iterrows()):
-            service_id = int(row["id"])
-            service_number = int(row["service_number"])
-            description_preview = safe_text(row["service_description"])
-            if len(description_preview) > 220:
-                description_preview = description_preview[:217].rstrip() + "..."
-            created_text = format_short_date(row["created_at"]) or safe_text(row["created_at"], "")
+            for idx, (_, row) in enumerate(category_df.iterrows()):
+                service_id = int(row["id"])
+                service_number = int(row["service_number"])
+                description_preview = safe_text(row["service_description"])
+                if len(description_preview) > 220:
+                    description_preview = description_preview[:217].rstrip() + "..."
+                created_text = format_short_date(row["created_at"]) or safe_text(row["created_at"], "")
 
-            with tile_columns[idx % 3]:
-                st.markdown(
-                    (
-                        '<div class="service-tile">'
-                        f'<div class="service-tile-number">#{service_number}</div>'
-                        f'<div class="service-tile-title">{escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
-                        f'<div class="service-tile-copy">{escape(description_preview or "No description available.")}</div>'
-                        '<div class="service-tile-meta">'
-                        '<div class="service-tile-meta-label">Target Location</div>'
-                        f'<div class="service-tile-meta-value">{escape(safe_text(row["target_location"], "Any U.S. location"))}</div>'
-                        '<div class="service-tile-meta-label">Created</div>'
-                        f'<div class="service-tile-meta-value">{escape(created_text or "Unknown")}</div>'
-                        '</div>'
-                        '</div>'
-                    ),
-                    unsafe_allow_html=True,
-                )
+                with tile_columns[idx % 3]:
+                    st.markdown(
+                        (
+                            '<div class="service-tile">'
+                            f'<div class="service-tile-number">#{service_number}</div>'
+                            f'<div class="service-tile-category">{escape(safe_text(row["service_category"], "General"))}</div>'
+                            f'<div class="service-tile-title">{escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
+                            f'<div class="service-tile-copy">{escape(description_preview or "No description available.")}</div>'
+                            '<div class="service-tile-meta">'
+                            '<div class="service-tile-meta-label">Target Location</div>'
+                            f'<div class="service-tile-meta-value">{escape(safe_text(row["target_location"], "Any U.S. location"))}</div>'
+                            '<div class="service-tile-meta-label">Created</div>'
+                            f'<div class="service-tile-meta-value">{escape(created_text or "Unknown")}</div>'
+                            '</div>'
+                            '</div>'
+                        ),
+                        unsafe_allow_html=True,
+                    )
 
-                action_col1, action_col2 = st.columns(2)
-                if action_col1.button("Edit Title", key=f"edit_service_{service_id}", use_container_width=True):
-                    st.session_state["service_rename_id"] = service_id
-                    st.session_state.pop("service_delete_id", None)
-                    st.rerun()
-                if action_col2.button("Delete", key=f"delete_service_{service_id}", use_container_width=True):
-                    st.session_state["service_delete_id"] = service_id
-                    st.session_state.pop("service_rename_id", None)
-                    st.rerun()
-
-                if rename_id == service_id:
-                    with st.form(f"rename_service_form_{service_id}"):
-                        new_title = st.text_input("Service title", value=safe_text(row["service_name"]), key=f"rename_title_{service_id}")
-                        form_col1, form_col2 = st.columns(2)
-                        save_rename = form_col1.form_submit_button("Save")
-                        cancel_rename = form_col2.form_submit_button("Cancel")
-                    if save_rename:
-                        if not new_title.strip():
-                            st.error("Please enter a title.")
-                        else:
-                            update_service_title(service_id, new_title)
-                            st.session_state.pop("service_rename_id", None)
-                            st.success("Service title updated.")
-                            st.rerun()
-                    if cancel_rename:
+                    action_col1, action_col2 = st.columns(2)
+                    if action_col1.button("Edit Title", key=f"edit_service_{service_id}", use_container_width=True):
+                        st.session_state["service_rename_id"] = service_id
+                        st.session_state.pop("service_delete_id", None)
+                        st.rerun()
+                    if action_col2.button("Delete", key=f"delete_service_{service_id}", use_container_width=True):
+                        st.session_state["service_delete_id"] = service_id
                         st.session_state.pop("service_rename_id", None)
                         st.rerun()
 
-                if delete_id == service_id:
-                    st.warning("Delete this service profile?")
-                    with st.form(f"delete_service_form_{service_id}"):
-                        confirm_col1, confirm_col2 = st.columns(2)
-                        confirm_delete = confirm_col1.form_submit_button("Confirm Delete", use_container_width=True)
-                        cancel_delete = confirm_col2.form_submit_button("Cancel", use_container_width=True)
-                    if confirm_delete:
-                        delete_service(service_id)
-                        st.session_state.pop("service_delete_id", None)
-                        st.success("Service profile deleted.")
-                        st.rerun()
-                    if cancel_delete:
-                        st.session_state.pop("service_delete_id", None)
-                        st.rerun()
+                    if rename_id == service_id:
+                        with st.form(f"rename_service_form_{service_id}"):
+                            new_title = st.text_input("Service", value=safe_text(row["service_name"]), key=f"rename_title_{service_id}")
+                            form_col1, form_col2 = st.columns(2)
+                            save_rename = form_col1.form_submit_button("Save")
+                            cancel_rename = form_col2.form_submit_button("Cancel")
+                        if save_rename:
+                            if not new_title.strip():
+                                st.error("Please enter a title.")
+                            else:
+                                update_service_title(service_id, new_title)
+                                st.session_state.pop("service_rename_id", None)
+                                st.success("Service title updated.")
+                                st.rerun()
+                        if cancel_rename:
+                            st.session_state.pop("service_rename_id", None)
+                            st.rerun()
+
+                    if delete_id == service_id:
+                        st.warning("Delete this service profile?")
+                        with st.form(f"delete_service_form_{service_id}"):
+                            confirm_col1, confirm_col2 = st.columns(2)
+                            confirm_delete = confirm_col1.form_submit_button("Confirm Delete", use_container_width=True)
+                            cancel_delete = confirm_col2.form_submit_button("Cancel", use_container_width=True)
+                        if confirm_delete:
+                            delete_service(service_id)
+                            st.session_state.pop("service_delete_id", None)
+                            st.success("Service profile deleted.")
+                            st.rerun()
+                        if cancel_delete:
+                            st.session_state.pop("service_delete_id", None)
+                            st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -2922,7 +2977,7 @@ def page_generate():
         st.info("Create a service profile first.")
         return
 
-    options = {f"{row['id']} - {row['service_name']}": row for _, row in svc.iterrows()}
+    options = build_service_option_map(svc)
     selected = st.multiselect("Select saved services", list(options.keys()))
     location_filter = st.text_input("Location filter", value="Any U.S. location")
     time_window = st.selectbox("Time window", TIME_OPTIONS, index=2)
@@ -2997,7 +3052,12 @@ def page_generate():
             duration_seconds = time.time() - start_time
             run_id = save_run(
                 run_name=f"{datetime.now().strftime('%Y-%m-%d %H:%M')} | {len(selected)} service(s)",
-                services_text="; ".join([options[label]["service_name"] for label in selected]),
+                services_text="; ".join(
+                    [
+                        f"{safe_text(options[label].get('service_category'), 'General')} | {options[label]['service_name']}"
+                        for label in selected
+                    ]
+                ),
                 service_count=len(selected),
                 location_filter=location_filter,
                 time_window=time_window,
@@ -3473,7 +3533,7 @@ def page_potential_expansions():
         st.info("Create service profiles first.")
         return
 
-    options = {f"{row['id']} - {row['service_name']}": row for _, row in svc.iterrows()}
+    options = build_service_option_map(svc)
     selected = st.multiselect("Select 3 or more services", list(options.keys()))
     st.caption("Default mode uses the saved evidence already collected in your account. This is faster and more tailored to your service set.")
     run_broader_validation = st.checkbox(
@@ -3691,7 +3751,7 @@ def page_potential_expansions():
             st.markdown("**Top Expansion Opportunities**")
             st.dataframe(pretty_df(ranked_table_df), use_container_width=True, hide_index=True)
 
-            services_text = "; ".join(selected_rows["service_name"].tolist())
+            services_text = "; ".join(selected)
             st.download_button(
                 "Download potential expansions as CSV",
                 data=csv_data(ranked_table_df),
