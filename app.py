@@ -240,20 +240,38 @@ def inject_global_styles():
             display: none;
         }
         [data-testid="stSidebar"] [data-baseweb="radio"] {
-            margin-bottom: 0.35rem;
-            border-radius: 0.8rem;
-            padding: 0.08rem 0.2rem;
+            margin-bottom: 0.48rem;
+            border-radius: 0.9rem;
+            padding: 0.12rem 0.18rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: #ffffff;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
         }
         [data-testid="stSidebar"] [data-baseweb="radio"] > div {
             background: transparent !important;
+        }
+        [data-testid="stSidebar"] [data-baseweb="radio"] input {
+            position: absolute !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        [data-testid="stSidebar"] [data-baseweb="radio"] svg {
+            display: none !important;
         }
         [data-testid="stSidebar"] [data-baseweb="radio"] label,
         [data-testid="stSidebar"] [data-baseweb="radio"] div[role="radio"] {
             width: 100%;
         }
+        [data-testid="stSidebar"] [data-baseweb="radio"] label {
+            padding: 0.32rem 0.55rem;
+            border-radius: 0.75rem;
+        }
         [data-testid="stSidebar"] [data-baseweb="radio"]:has(input:checked) {
             background: #4f7cf0;
             box-shadow: 0 10px 22px rgba(79, 124, 240, 0.22);
+            border-color: #4f7cf0;
         }
         [data-testid="stSidebar"] [data-baseweb="radio"]:has(input:checked) p,
         [data-testid="stSidebar"] [data-baseweb="radio"]:has(input:checked) label,
@@ -264,6 +282,7 @@ def inject_global_styles():
         [data-testid="stSidebar"] [data-baseweb="radio"] p,
         [data-testid="stSidebar"] [data-baseweb="radio"] span {
             font-size: 0.97rem;
+            line-height: 1.2;
         }
         [data-testid="stSidebar"] .sidebar-brand {
             font-size: 1.5rem;
@@ -3172,16 +3191,16 @@ else:
             unsafe_allow_html=True,
         )
         nav_options = [
-            "⌂  Dashboard",
-            "◫  Plans & Billing",
-            "▣  Service Profiles",
-            "➜  Generate List",
-            "☰  Saved Lists",
-            "➤  Next Steps",
-            "✦  Potential Expansions",
+            "Dashboard",
+            "Plans & Billing",
+            "Service Profiles",
+            "Generate List",
+            "Saved Lists",
+            "Next Steps",
+            "Potential Expansions",
         ]
         if is_admin_user(user):
-            nav_options.append("⚙  Users")
+            nav_options.append("Users")
         page = st.radio(
             "Navigate",
             nav_options,
@@ -3191,22 +3210,22 @@ else:
             set_current_user(None)
             st.rerun()
 
-    if page == "◫  Plans & Billing":
+    if page == "Plans & Billing":
         page_billing(user)
     elif not portal_access_allowed(user):
         st.warning("Your account needs an active subscription or available demo credits to use the portal.")
         page_billing(user)
-    elif page == "⌂  Dashboard":
+    elif page == "Dashboard":
         page_dashboard()
-    elif page == "▣  Service Profiles":
+    elif page == "Service Profiles":
         page_services()
-    elif page == "➜  Generate List":
+    elif page == "Generate List":
         page_generate()
-    elif page == "➤  Next Steps":
+    elif page == "Next Steps":
         page_next_steps()
-    elif page == "✦  Potential Expansions":
+    elif page == "Potential Expansions":
         page_potential_expansions()
-    elif page == "⚙  Users" and is_admin_user(user):
+    elif page == "Users" and is_admin_user(user):
         page_users()
     else:
         page_saved_lists()
