@@ -3433,19 +3433,22 @@ def page_auth():
         }
         .landing-hero {
             display: grid;
-            grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
             gap: 1.35rem;
             align-items: start;
-            min-height: calc(100vh - 10rem);
-            padding: 2.4rem 0 2rem 0;
+            min-height: 560px;
+            padding: 1.8rem 0 1.6rem 0;
+        }
+        .landing-hero-frame {
+            min-height: 560px;
         }
         .landing-hero-copy {
             max-width: 42rem;
-            min-height: 520px;
+            min-height: 560px;
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
-            padding: 4.4rem 0 0.35rem 0;
+            padding: 0.4rem 0 0.35rem 0;
         }
         .landing-band {
             border: 1px solid rgba(255,255,255,0.08);
@@ -3627,15 +3630,21 @@ def page_auth():
         }
         .landing-mockup-wrap {
             position: relative;
-            min-height: 520px;
+            min-height: 560px;
             padding: 0;
             overflow: hidden;
             display: flex;
             align-items: flex-start;
         }
+        .landing-hero-visual {
+            min-height: 560px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+        }
         .hero-clean-shell {
             position: relative;
-            min-height: 520px;
+            min-height: 560px;
             width: 100%;
             border-radius: 2rem;
             background:
@@ -4095,7 +4104,10 @@ def page_auth():
                 grid-template-columns: 1fr;
                 min-height: auto;
                 gap: 1.5rem;
-                padding-top: 2.1rem;
+                padding-top: 1.4rem;
+            }
+            .landing-hero-frame {
+                min-height: auto;
             }
             .landing-hero-copy {
                 min-height: auto;
@@ -4117,7 +4129,8 @@ def page_auth():
                 max-width: 28ch;
             }
             .landing-mockup-wrap,
-            .hero-clean-shell {
+            .hero-clean-shell,
+            .landing-hero-visual {
                 min-height: 420px;
             }
             .hero-clean-browser {
@@ -4231,7 +4244,8 @@ def page_auth():
             """,
             unsafe_allow_html=True,
         )
-        hero_left, hero_right = st.columns([0.94, 1.06], gap="large")
+        st.markdown('<div class="landing-hero-frame">', unsafe_allow_html=True)
+        hero_left, hero_right = st.columns([1.0, 1.02], gap="large")
         with hero_left:
             st.markdown('<div class="landing-hero-copy">', unsafe_allow_html=True)
             st.markdown('<div class="landing-title">Turn public market signals into your next opportunities</div>', unsafe_allow_html=True)
@@ -4242,7 +4256,10 @@ def page_auth():
             render_landing_signup_capture()
             st.markdown("</div>", unsafe_allow_html=True)
         with hero_right:
+            st.markdown('<div class="landing-hero-visual">', unsafe_allow_html=True)
             st.markdown(landing_marketing_mockup_html("hero"), unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
