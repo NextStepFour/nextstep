@@ -554,6 +554,10 @@ Rules:
 - Suggest services that are adjacent or related to the current service set
 - Do not repeat services already explicitly covered
 - Base suggestions only on evidence shown in the market evidence
+- Name each suggested service based on the overall hiring pattern across the supporting signals, not just one repeated keyword
+- Only use a narrow term like repowering, SCADA, commissioning, controls, QAQC, or grid integration in the suggested service title when that term is clearly supported by multiple postings or repeated responsibility language
+- If the evidence is broader or mixed, prefer a more general title that reflects the real pattern of work being requested
+- Do not force all suggested service titles into the same wording pattern
 - supporting_signal_count must be an integer
 - service_description should be a short factual description of the suggested service based on repeated job-posting language
 - connected_current_services must be a list of current saved services this suggested expansion most closely connects to
