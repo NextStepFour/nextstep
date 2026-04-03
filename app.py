@@ -5,9 +5,13 @@ import re
 import sqlite3
 import hashlib
 import hmac
+import secrets
+import smtplib
+import ssl
 import statistics
 import time
 from datetime import datetime
+from email.message import EmailMessage
 from xml.sax.saxutils import escape
 
 import pandas as pd
@@ -33,6 +37,13 @@ APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8501")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 DISCOVERY_MODEL = os.getenv("OPENAI_DISCOVERY_MODEL", "gpt-5-mini")
 SYNTHESIS_MODEL = os.getenv("OPENAI_SYNTHESIS_MODEL", "gpt-5-mini")
+PASSWORD_RESET_HOURS = int(os.getenv("PASSWORD_RESET_HOURS", "2"))
+SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "").strip()
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "1").strip() not in {"0", "false", "False"}
 PLANS = {
     "starter": {
         "name": "Starter",
@@ -731,6 +742,19 @@ def init_db():
         )
         db.execute(
             """
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                used_at TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+            """
+        )
+        db.execute(
+            """
             CREATE TABLE IF NOT EXISTS services (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -846,6 +870,123 @@ def verify_password(password, password_hash):
     expected = bytes.fromhex(digest_hex)
     actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120000)
     return hmac.compare_digest(actual, expected)
+
+
+def hash_reset_token(token):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def smtp_ready():
+    return bool(SMTP_HOST and SMTP_FROM_EMAIL)
+
+
+def send_email_message(to_email, subject, body_text):
+    if not smtp_ready():
+        raise ValueError("Password reset email is not configured yet.")
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = SMTP_FROM_EMAIL
+    message["To"] = to_email
+    message.set_content(body_text)
+
+    if SMTP_USE_TLS:
+        context = ssl.create_default_context()
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls(context=context)
+            if SMTP_USERNAME:
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(message)
+    else:
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=ssl.create_default_context()) as server:
+            if SMTP_USERNAME:
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(message)
+
+
+def create_password_reset_token(email):
+    user = get_user_by_email(email)
+    if not user:
+        return None
+    token = secrets.token_urlsafe(32)
+    token_hash = hash_reset_token(token)
+    created_at = datetime.now()
+    expires_at = created_at.timestamp() + (PASSWORD_RESET_HOURS * 3600)
+    created_text = created_at.strftime("%Y-%m-%d %H:%M:%S")
+    expires_text = datetime.fromtimestamp(expires_at).strftime("%Y-%m-%d %H:%M:%S")
+    with conn() as db:
+        db.execute(
+            "UPDATE password_reset_tokens SET used_at = ? WHERE user_id = ? AND used_at IS NULL",
+            (created_text, user["id"]),
+        )
+        db.execute(
+            """
+            INSERT INTO password_reset_tokens (
+                user_id, token_hash, created_at, expires_at, used_at
+            ) VALUES (?, ?, ?, ?, NULL)
+            """,
+            (user["id"], token_hash, created_text, expires_text),
+        )
+    return token, user
+
+
+def get_password_reset_record(token):
+    if not token:
+        return None
+    token_hash = hash_reset_token(token)
+    with conn() as db:
+        row = db.execute(
+            """
+            SELECT prt.*, u.email, u.full_name
+            FROM password_reset_tokens prt
+            JOIN users u ON u.id = prt.user_id
+            WHERE prt.token_hash = ?
+            ORDER BY prt.id DESC
+            LIMIT 1
+            """,
+            (token_hash,),
+        ).fetchone()
+    if not row:
+        return None
+    record = dict(row)
+    expires_at = pd.to_datetime(record.get("expires_at"), errors="coerce")
+    used_at = pd.to_datetime(record.get("used_at"), errors="coerce")
+    if pd.notna(used_at):
+        return None
+    if pd.isna(expires_at) or expires_at < pd.Timestamp.now():
+        return None
+    return record
+
+
+def mark_password_reset_used(reset_id):
+    with conn() as db:
+        db.execute(
+            "UPDATE password_reset_tokens SET used_at = ? WHERE id = ?",
+            (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(reset_id)),
+        )
+
+
+def update_user_password(user_id, new_password):
+    update_user_fields(int(user_id), password_hash=hash_password(new_password))
+
+
+def password_reset_url(token):
+    return f"{APP_BASE_URL}?reset_token={token}"
+
+
+def send_password_reset_email(email):
+    created = create_password_reset_token(email)
+    if not created:
+        return False
+    token, user = created
+    reset_link = password_reset_url(token)
+    body = (
+        f"Hi {safe_text(user.get('full_name'), 'there')},\n\n"
+        f"We received a request to reset your {APP_NAME} password.\n\n"
+        f"Open this link to set a new password:\n{reset_link}\n\n"
+        f"This link expires in {PASSWORD_RESET_HOURS} hour(s). If you did not request a password reset, you can ignore this email.\n"
+    )
+    send_email_message(user["email"], f"{APP_NAME} password reset", body)
+    return True
 
 
 def get_user_by_email(email):
@@ -2891,7 +3032,16 @@ def portal_access_allowed(user):
     return user.get("subscription_status") in {"active", "trialing"} or int(user.get("credit_balance") or 0) > 0
 
 
+def clear_reset_query_param():
+    try:
+        if "reset_token" in st.query_params:
+            del st.query_params["reset_token"]
+    except Exception:
+        pass
+
+
 def page_auth():
+    reset_token = st.query_params.get("reset_token")
     st.markdown(
         """
         <style>
@@ -2979,49 +3129,92 @@ def page_auth():
             '<div class="auth-copy">Create an account to save services, generate prospect lists, and manage subscription access.</div>',
             unsafe_allow_html=True,
         )
-        login_tab, signup_tab = st.tabs(["Sign In", "Create Account"])
-
-        with login_tab:
-            with st.form("login_form"):
-                email = st.text_input("Email", key="login_email")
-                password = st.text_input("Password", type="password", key="login_password")
-                submitted = st.form_submit_button("Sign In")
-            if submitted:
-                user = get_user_by_email(email)
-                if not user or not verify_password(password, user["password_hash"]):
-                    st.error("Invalid email or password.")
-                else:
-                    if user.get("email", "").strip().lower() == ADMIN_EMAIL:
-                        update_user_fields(
-                            user["id"],
-                            is_admin=1,
-                            credit_balance=max(int(user.get("credit_balance") or 0), ADMIN_DEMO_CREDITS),
-                        )
-                        user = get_user_by_id(user["id"])
-                    user = sync_user_billing(user)
-                    set_current_user(user)
-                    st.success("Signed in.")
+        if reset_token:
+            reset_record = get_password_reset_record(reset_token)
+            if not reset_record:
+                st.error("This password reset link is invalid or has expired.")
+                if st.button("Back to Sign In", key="back_from_invalid_reset"):
+                    clear_reset_query_param()
                     st.rerun()
-
-        with signup_tab:
-            with st.form("signup_form"):
-                full_name = st.text_input("Full name", key="signup_name")
-                email = st.text_input("Email", key="signup_email")
-                password = st.text_input("Password", type="password", key="signup_password")
-                submitted = st.form_submit_button("Create Account")
-            if submitted:
-                if not full_name.strip() or not email.strip() or not password.strip():
-                    st.error("Please complete all fields.")
-                elif get_user_by_email(email):
-                    st.error("An account with that email already exists.")
-                else:
-                    try:
-                        user = create_user(full_name, email, password)
-                        set_current_user(user)
-                        st.success("Account created. You can use starter demo credits or subscribe below.")
+            else:
+                st.markdown("**Reset Password**")
+                st.caption(f"Reset password for {safe_text(reset_record.get('email'))}")
+                with st.form("reset_password_form"):
+                    new_password = st.text_input("New Password", type="password", key="reset_password_1")
+                    confirm_password = st.text_input("Confirm New Password", type="password", key="reset_password_2")
+                    submitted = st.form_submit_button("Save New Password")
+                if submitted:
+                    if not new_password.strip() or not confirm_password.strip():
+                        st.error("Please complete both password fields.")
+                    elif new_password != confirm_password:
+                        st.error("The passwords do not match.")
+                    elif len(new_password) < 8:
+                        st.error("Use a password with at least 8 characters.")
+                    else:
+                        update_user_password(reset_record["user_id"], new_password)
+                        mark_password_reset_used(reset_record["id"])
+                        clear_reset_query_param()
+                        st.success("Password updated. You can sign in now.")
                         st.rerun()
-                    except ValueError as exc:
-                        st.error(str(exc))
+                if st.button("Back to Sign In", key="back_from_reset"):
+                    clear_reset_query_param()
+                    st.rerun()
+        else:
+            login_tab, signup_tab = st.tabs(["Sign In", "Create Account"])
+
+            with login_tab:
+                with st.form("login_form"):
+                    email = st.text_input("Email", key="login_email")
+                    password = st.text_input("Password", type="password", key="login_password")
+                    submitted = st.form_submit_button("Sign In")
+                if submitted:
+                    user = get_user_by_email(email)
+                    if not user or not verify_password(password, user["password_hash"]):
+                        st.error("Invalid email or password.")
+                    else:
+                        if user.get("email", "").strip().lower() == ADMIN_EMAIL:
+                            update_user_fields(
+                                user["id"],
+                                is_admin=1,
+                                credit_balance=max(int(user.get("credit_balance") or 0), ADMIN_DEMO_CREDITS),
+                            )
+                            user = get_user_by_id(user["id"])
+                        user = sync_user_billing(user)
+                        set_current_user(user)
+                        st.success("Signed in.")
+                        st.rerun()
+                with st.expander("Forgot password?"):
+                    with st.form("forgot_password_form"):
+                        reset_email = st.text_input("Email", key="forgot_password_email")
+                        reset_submit = st.form_submit_button("Send reset link")
+                    if reset_submit:
+                        try:
+                            send_password_reset_email(reset_email)
+                            st.success("If that email is registered, a password reset link has been sent.")
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        except Exception:
+                            st.error("Password reset email could not be sent right now.")
+
+            with signup_tab:
+                with st.form("signup_form"):
+                    full_name = st.text_input("Full name", key="signup_name")
+                    email = st.text_input("Email", key="signup_email")
+                    password = st.text_input("Password", type="password", key="signup_password")
+                    submitted = st.form_submit_button("Create Account")
+                if submitted:
+                    if not full_name.strip() or not email.strip() or not password.strip():
+                        st.error("Please complete all fields.")
+                    elif get_user_by_email(email):
+                        st.error("An account with that email already exists.")
+                    else:
+                        try:
+                            user = create_user(full_name, email, password)
+                            set_current_user(user)
+                            st.success("Account created. You can use starter demo credits or subscribe below.")
+                            st.rerun()
+                        except ValueError as exc:
+                            st.error(str(exc))
         st.markdown("</div>", unsafe_allow_html=True)
 
     with right:
