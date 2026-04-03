@@ -1853,6 +1853,44 @@ def build_company_next_steps_description(company_row, company_evidence_df):
     return ". ".join(description_parts) + "."
 
 
+def build_company_business_description(company_name, company_evidence_df):
+    source_types = flatten_unique(company_evidence_df["source_type"].tolist())
+    departments = flatten_unique(company_evidence_df["buyer_department"].tolist())
+    services = flatten_unique(company_evidence_df["matched_service"].tolist())
+    titles = flatten_unique(company_evidence_df["job_title"].tolist())
+    lifecycle_signals = []
+
+    title_text = " ".join(titles).lower()
+    if any(keyword in title_text for keyword in ["commission", "startup", "mechanical completion"]):
+        lifecycle_signals.append("commissioning and readiness work")
+    if any(keyword in title_text for keyword in ["field", "site", "superintendent", "construction"]):
+        lifecycle_signals.append("field and project execution")
+    if any(keyword in title_text for keyword in ["operations", "asset", "performance", "maintenance", "technician"]):
+        lifecycle_signals.append("operations and long-term asset support")
+    if any(keyword in title_text for keyword in ["quality", "qa", "qc", "inspection"]):
+        lifecycle_signals.append("quality and inspection-related activity")
+    if any(keyword in title_text for keyword in ["engineering", "engineer", "controls", "scada"]):
+        lifecycle_signals.append("engineering and technical support")
+
+    lifecycle_signals = flatten_unique(lifecycle_signals)
+    dept_text = ", ".join(departments[:3]) if departments else "multiple operational teams"
+    service_text = ", ".join(services[:3]) if services else "the selected service scope"
+    source_text = ", ".join(source_types[:2]).lower() if source_types else "public hiring sources"
+
+    if lifecycle_signals:
+        lifecycle_text = ", ".join(lifecycle_signals[:3])
+        return (
+            f"{safe_text(company_name, 'This company')} appears active across {lifecycle_text}. "
+            f"Public hiring signals from {source_text} suggest current demand linked to {service_text}, "
+            f"with relevant roles connected to {dept_text}."
+        )
+
+    return (
+        f"{safe_text(company_name, 'This company')} shows public hiring activity connected to {service_text}. "
+        f"The roles captured in this report suggest active demand across {dept_text}, based on the job postings found."
+    )
+
+
 def render_next_steps_job_block(job_row):
     why_matches = flatten_unique(job_row.get("why_it_matches", []))
     why_text = "; ".join(why_matches) if why_matches else "No additional evidence notes captured."
@@ -2619,18 +2657,48 @@ def page_next_steps():
     st.markdown(
         """
         <style>
+        .nextsteps-wrap {
+            max-width: 1080px;
+            margin: 0 auto;
+        }
         .nextsteps-company-box {
             border: 1px solid var(--brand-border);
             border-radius: 1rem;
-            padding: 1rem 1rem 0.9rem 1rem;
-            background: rgba(96, 165, 250, 0.05);
-            margin-bottom: 1rem;
+            padding: 1.15rem 1.15rem 0.95rem 1.15rem;
+            background: linear-gradient(180deg, rgba(96, 165, 250, 0.08), rgba(255,255,255,0.02));
+            margin: 0 auto 1.15rem auto;
+            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
         }
         .nextsteps-company-title {
-            font-size: 1.25rem;
+            font-size: 1.32rem;
             font-weight: 800;
             color: #eff6ff;
             margin-bottom: 0.45rem;
+        }
+        .nextsteps-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.85rem;
+            margin-bottom: 0.95rem;
+        }
+        .nextsteps-meta-card {
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 0.95rem;
+            background: rgba(15, 23, 42, 0.45);
+            padding: 0.9rem 1rem;
+        }
+        .nextsteps-meta-label {
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: #93c5fd;
+            margin-bottom: 0.28rem;
+        }
+        .nextsteps-meta-value {
+            font-size: 0.98rem;
+            line-height: 1.55;
+            color: #e5eefb;
         }
         .nextsteps-section-label {
             display: inline-block;
@@ -2647,11 +2715,17 @@ def page_next_steps():
             line-height: 1.55;
             margin-bottom: 0.8rem;
         }
+        @media (max-width: 900px) {
+            .nextsteps-grid {
+                grid-template-columns: 1fr;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
+    st.markdown('<div class="nextsteps-wrap">', unsafe_allow_html=True)
     top_company_count = min(5, len(company_priority_df))
     top_companies_df = company_priority_df.head(top_company_count).copy()
     deep_dive_cache = st.session_state.setdefault("company_deep_dive_cache", {})
@@ -2711,25 +2785,21 @@ def page_next_steps():
             unsafe_allow_html=True,
         )
         st.markdown(
-            f'<div class="nextsteps-company-copy"><strong>Company Description:</strong> {escape(build_company_next_steps_description(company_row, company_evidence_df))}</div>',
+            f'<div class="nextsteps-grid">'
+            f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Company Description</div><div class="nextsteps-meta-value">{escape(build_company_business_description(company_name, company_evidence_df))}</div></div>'
+            f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Why It Is Relevant</div><div class="nextsteps-meta-value">{escape(build_company_next_steps_description(company_row, company_evidence_df))}</div></div>'
+            f'</div>',
             unsafe_allow_html=True,
         )
-
-        meta_left, meta_right = st.columns(2)
-        with meta_left:
-            st.markdown(
-                f"**Suggested Next Step:** {company_row['suggested_next_step']}"
-            )
-            st.markdown(
-                f"**Likely Buyer Department:** {company_row['likely_buyer_department_general'] or 'Unknown'}"
-            )
-        with meta_right:
-            st.markdown(
-                f"**Relevant Posting Count:** {company_row['relevant_posting_count']}"
-            )
-            st.markdown(
-                f"**Most Recent Posting Date:** {company_row['most_recent_posted_date']}"
-            )
+        st.markdown(
+            f'<div class="nextsteps-grid">'
+            f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Suggested Next Step</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["suggested_next_step"], "No next step captured."))}</div></div>'
+            f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Likely Buyer Department</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["likely_buyer_department_general"], "Unknown"))}</div></div>'
+            f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Relevant Posting Count</div><div class="nextsteps-meta-value">{escape(str(company_row["relevant_posting_count"]))}</div></div>'
+            f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Most Recent Posting Date</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["most_recent_posted_date"], "Unknown"))}</div></div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
         st.markdown('<div class="nextsteps-section-label">Relevant Job Postings</div>', unsafe_allow_html=True)
         if relevant_jobs_df.empty:
@@ -2818,6 +2888,7 @@ def page_next_steps():
                     for _, job_row in broader_deep_dive_df.iterrows():
                         render_company_deep_dive_job_block(job_row)
         st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def page_potential_expansions():
