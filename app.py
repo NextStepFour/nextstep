@@ -3075,9 +3075,18 @@ def render_auth_reset_panel(reset_token):
 
 def render_auth_account_panel():
     auth_mode = st.session_state.get("landing_auth_mode", "Create Account")
-    auth_tabs = st.tabs(["Sign In", "Create Account"])
+    signup_first = auth_mode == "Create Account"
+    tab_labels = ["Create Account", "Sign In"] if signup_first else ["Sign In", "Create Account"]
+    auth_tabs = st.tabs(tab_labels)
 
-    with auth_tabs[0]:
+    if signup_first:
+        signup_tab = auth_tabs[0]
+        login_tab = auth_tabs[1]
+    else:
+        login_tab = auth_tabs[0]
+        signup_tab = auth_tabs[1]
+
+    with login_tab:
         with st.form("login_form"):
             email = st.text_input("Email", key="login_email")
             password = st.text_input("Password", type="password", key="login_password")
@@ -3111,10 +3120,14 @@ def render_auth_account_panel():
                 except Exception:
                     st.error("Password reset email could not be sent right now.")
 
-    with auth_tabs[1]:
+    with signup_tab:
         with st.form("signup_form"):
             full_name = st.text_input("Full name", key="signup_name")
-            email = st.text_input("Email", key="signup_email")
+            email = st.text_input(
+                "Email",
+                value=safe_text(st.session_state.get("landing_signup_email")),
+                key="signup_email",
+            )
             password = st.text_input("Password", type="password", key="signup_password")
             submitted = st.form_submit_button("Create Account")
         if submitted:
@@ -3125,6 +3138,7 @@ def render_auth_account_panel():
             else:
                 try:
                     user = create_user(full_name, email, password)
+                    st.session_state.pop("landing_signup_email", None)
                     set_current_user(user)
                     st.success("Account created. You can use starter demo credits or subscribe below.")
                     st.rerun()
@@ -3132,11 +3146,68 @@ def render_auth_account_panel():
                     st.error(str(exc))
 
 
+def render_landing_signup_capture():
+    st.markdown('<div class="landing-signup-shell">', unsafe_allow_html=True)
+    email_col, button_col = st.columns([1.75, 0.9], gap="small")
+    with email_col:
+        landing_email = st.text_input(
+            "Start free with your email",
+            placeholder="Enter your email address",
+            key="landing_capture_email",
+            label_visibility="collapsed",
+        )
+    with button_col:
+        st.markdown('<div class="landing-signup-button-pad"></div>', unsafe_allow_html=True)
+        start_free = st.button(
+            "Start Free",
+            key="landing_capture_submit",
+            type="primary",
+            use_container_width=True,
+        )
+    st.caption("Use your email to begin account setup and move straight into account creation.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if start_free:
+        if not landing_email.strip():
+            st.error("Enter your email address to get started.")
+        else:
+            st.session_state["landing_signup_email"] = landing_email.strip()
+            st.session_state["landing_auth_mode"] = "Create Account"
+            st.session_state["landing_show_auth"] = True
+            st.rerun()
+
+
 def page_auth():
     reset_token = st.query_params.get("reset_token")
     st.markdown(
         """
         <style>
+        .landing-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .landing-brand {
+            font-size: 1.2rem;
+            font-weight: 850;
+            color: #eff6ff;
+            letter-spacing: -0.01em;
+        }
+        .landing-topbar-cta {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 165px;
+            padding: 0.82rem 1.2rem;
+            border-radius: 999px;
+            text-decoration: none !important;
+            background: var(--brand-blue);
+            color: #0f172a !important;
+            font-weight: 750;
+            border: 1px solid var(--brand-blue);
+        }
         .auth-hero {
             position: relative;
             min-height: 620px;
@@ -3263,6 +3334,14 @@ def page_auth():
             flex-wrap: wrap;
             margin-bottom: 0.8rem;
         }
+        .landing-signup-shell {
+            max-width: 700px;
+            margin-top: 0.35rem;
+            margin-bottom: 0.9rem;
+        }
+        .landing-signup-button-pad {
+            height: 0.1rem;
+        }
         .landing-anchor-button {
             display: inline-flex;
             align-items: center;
@@ -3369,6 +3448,15 @@ def page_auth():
         with right:
             st.markdown(auth_space_scene_html(), unsafe_allow_html=True)
     else:
+        st.markdown(
+            f"""
+            <div class="landing-topbar">
+                <div class="landing-brand">{APP_NAME}</div>
+                <a class="landing-topbar-cta" href="#auth-panel">Start Free</a>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         hero_left, hero_right = st.columns([1.05, 1.0], gap="large")
         with hero_left:
             st.markdown('<div class="landing-kicker">Market intelligence for service growth</div>', unsafe_allow_html=True)
@@ -3381,6 +3469,7 @@ def page_auth():
                 '<div class="landing-support">Built for service providers that want a clearer, more usable view of market demand and next-step opportunities.</div>',
                 unsafe_allow_html=True,
             )
+            render_landing_signup_capture()
             st.markdown(
                 """
                 <div class="landing-anchor-row">
@@ -3392,6 +3481,17 @@ def page_auth():
             )
         with hero_right:
             st.markdown(auth_space_scene_html(), unsafe_allow_html=True)
+
+        st.markdown(
+            """
+            <div class="landing-auth-shell" id="auth-panel">
+                <div class="landing-auth-title">Create your account or sign in</div>
+                <div class="landing-auth-copy">Use the quick signup above or complete your account setup here.</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        render_auth_account_panel()
+        st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown(
             """
@@ -3472,17 +3572,6 @@ def page_auth():
             """,
             unsafe_allow_html=True,
         )
-
-        st.markdown(
-            """
-            <div class="landing-auth-shell" id="auth-panel">
-                <div class="landing-auth-title">Start turning public signals into a more usable market view</div>
-                <div class="landing-auth-copy">Build your service map and generate your first buyer-company signals.</div>
-            """,
-            unsafe_allow_html=True,
-        )
-        render_auth_account_panel()
-        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
