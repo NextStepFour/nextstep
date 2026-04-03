@@ -25,6 +25,7 @@ DB_PATH = os.getenv("NEXTSTEP_DB_PATH", "nextstep_portal.db")
 DEFAULT_CREDITS = 50
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "rgordon@heliovolta.com").strip().lower()
 ADMIN_DEMO_CREDITS = int(os.getenv("ADMIN_DEMO_CREDITS", "100"))
+SIGNUP_FREE_CREDITS = int(os.getenv("SIGNUP_FREE_CREDITS", "10"))
 TIME_OPTIONS = ["1 week", "2 weeks", "1 month", "2 months", "3 months"]
 NEXT_STEPS_REFRESH_COST = 10
 COMPANY_DEEP_DIVE_COST = 5
@@ -855,7 +856,7 @@ def create_user(full_name, email, password):
     normalized_email = email.strip().lower()
     wants_admin_email = normalized_email == ADMIN_EMAIL
     is_admin = 1 if wants_admin_email else 0
-    starting_credits = ADMIN_DEMO_CREDITS if is_admin else 0
+    starting_credits = ADMIN_DEMO_CREDITS if is_admin else SIGNUP_FREE_CREDITS
     with conn() as db:
         cursor = db.execute(
             """
