@@ -407,6 +407,151 @@ def auth_space_scene_html():
     )
 
 
+def landing_marketing_mockup_html(kind="hero"):
+    if kind == "list":
+        return """
+        <div class="landing-mockup-wrap landing-mockup-list">
+            <div class="landing-orbit orbit-a"></div>
+            <div class="landing-orbit orbit-b"></div>
+            <div class="mockup-window">
+                <div class="mockup-topbar">
+                    <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
+                    <div class="mockup-url">Generate List</div>
+                </div>
+                <div class="mockup-content">
+                    <div class="mockup-stat-row">
+                        <div class="mockup-pill strong">3 services</div>
+                        <div class="mockup-pill">1 month</div>
+                        <div class="mockup-pill">15 results</div>
+                    </div>
+                    <div class="mockup-table-card">
+                        <div class="mockup-table-header">
+                            <span>Buyer Company</span><span>Signals</span><span>Service</span>
+                        </div>
+                        <div class="mockup-table-row"><span>DEPCOM Power</span><span>4</span><span>RCA</span></div>
+                        <div class="mockup-table-row"><span>EDP Renewables</span><span>3</span><span>QAQC</span></div>
+                        <div class="mockup-table-row"><span>SOLV Energy</span><span>2</span><span>Commissioning</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="mockup-float-card top-right">
+                <div class="float-kicker">Exportable</div>
+                <div class="float-title">CSV + PDF</div>
+            </div>
+        </div>
+        """
+    if kind == "next":
+        return """
+        <div class="landing-mockup-wrap landing-mockup-next">
+            <div class="landing-orbit orbit-a"></div>
+            <div class="mockup-window">
+                <div class="mockup-topbar">
+                    <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
+                    <div class="mockup-url">Next Steps</div>
+                </div>
+                <div class="mockup-content">
+                    <div class="mockup-rank-card">
+                        <div class="rank-chip">#1</div>
+                        <div>
+                            <div class="float-title">DEPCOM Power</div>
+                            <div class="float-kicker">5 relevant postings</div>
+                        </div>
+                    </div>
+                    <div class="mockup-mini-grid">
+                        <div class="mockup-mini-card"><span>Freshest signal</span><strong>04/03/26</strong></div>
+                        <div class="mockup-mini-card"><span>Repeated demand</span><strong>High</strong></div>
+                        <div class="mockup-mini-card"><span>Top focus</span><strong>Field Ops</strong></div>
+                    </div>
+                </div>
+            </div>
+            <div class="mockup-float-card bottom-left">
+                <div class="float-kicker">Priority</div>
+                <div class="float-title">Top 5 ranked</div>
+            </div>
+        </div>
+        """
+    if kind == "expansion":
+        return """
+        <div class="landing-mockup-wrap landing-mockup-expansion">
+            <div class="landing-orbit orbit-b"></div>
+            <div class="mockup-window">
+                <div class="mockup-topbar">
+                    <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
+                    <div class="mockup-url">Potential Expansions</div>
+                </div>
+                <div class="mockup-content">
+                    <div class="mockup-stat-row">
+                        <div class="mockup-pill strong">7 gaps</div>
+                        <div class="mockup-pill">56 signals</div>
+                    </div>
+                    <div class="mockup-stack">
+                        <div class="mockup-stack-row"><span>Commissioning Support</span><strong>12</strong></div>
+                        <div class="mockup-stack-row"><span>Field Quality Oversight</span><strong>9</strong></div>
+                        <div class="mockup-stack-row"><span>Grid Integration Studies</span><strong>6</strong></div>
+                    </div>
+                </div>
+            </div>
+            <div class="mockup-float-card top-right">
+                <div class="float-kicker">Trend</div>
+                <div class="float-title">Adjacent scopes</div>
+            </div>
+        </div>
+        """
+    return """
+    <div class="landing-mockup-wrap landing-mockup-hero">
+        <div class="landing-orbit orbit-a"></div>
+        <div class="landing-orbit orbit-b"></div>
+        <div class="mockup-window hero-window">
+            <div class="mockup-topbar">
+                <span class="mock-dot"></span><span class="mock-dot"></span><span class="mock-dot"></span>
+                <div class="mockup-url">NextStepSignal</div>
+            </div>
+            <div class="mockup-content">
+                <div class="mockup-hero-banner">
+                    <div class="mockup-hero-title">Market signals in one view</div>
+                    <div class="mockup-hero-copy">Find buyers, rank targets, and see service gaps.</div>
+                </div>
+                <div class="mockup-hero-grid">
+                    <div class="mockup-hero-card"><span>Buyer companies</span><strong>58</strong></div>
+                    <div class="mockup-hero-card"><span>Top targets</span><strong>5</strong></div>
+                    <div class="mockup-hero-card"><span>Expansion gaps</span><strong>7</strong></div>
+                    <div class="mockup-hero-card"><span>Fresh signals</span><strong>04/03</strong></div>
+                </div>
+            </div>
+        </div>
+        <div class="mockup-float-card top-right">
+            <div class="float-kicker">Generate List</div>
+            <div class="float-title">Public demand signals</div>
+        </div>
+        <div class="mockup-float-card bottom-left">
+            <div class="float-kicker">Next Steps</div>
+            <div class="float-title">Top companies ranked</div>
+        </div>
+    </div>
+    """
+
+
+def render_landing_feature_band(title, copy, bullets, kind, tone="soft"):
+    bullet_html = "".join(f"<div class=\"landing-bullet\">{escape(item)}</div>" for item in bullets)
+    st.markdown(
+        f"""
+        <div class="landing-band {tone}">
+            <div class="landing-feature-layout">
+                <div class="landing-feature-copy-shell">
+                    <div class="landing-product-title">{escape(title)}</div>
+                    <div class="landing-product-copy">{escape(copy)}</div>
+                    <div class="landing-product-bullets">{bullet_html}</div>
+                </div>
+                <div class="landing-feature-visual-shell">
+                    {landing_marketing_mockup_html(kind)}
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 PROMPT_TEMPLATE = """You are a market intelligence engine for solar service sales.
 
 Your task is to search the public web for U.S. solar job postings, recently filled roles, RFPs, and similar opportunities from the last {{TIME_WINDOW}} that overlap with the service description below.
@@ -3437,6 +3582,232 @@ def page_auth():
             color: #cbd5e1;
             line-height: 1.7;
         }
+        .landing-bullet {
+            margin-bottom: 0.32rem;
+        }
+        .landing-feature-layout {
+            display: grid;
+            grid-template-columns: 0.9fr 1.1fr;
+            gap: 1rem;
+            align-items: center;
+        }
+        .landing-feature-copy-shell {
+            min-width: 0;
+        }
+        .landing-feature-visual-shell {
+            min-width: 0;
+        }
+        .landing-mockup-wrap {
+            position: relative;
+            min-height: 300px;
+            padding: 1.2rem 0.2rem 0.6rem;
+        }
+        .landing-orbit {
+            position: absolute;
+            border: 1px solid rgba(147, 197, 253, 0.20);
+            border-radius: 999px;
+            pointer-events: none;
+        }
+        .landing-orbit.orbit-a {
+            width: 90%;
+            height: 78%;
+            left: 2%;
+            top: 6%;
+            transform: rotate(8deg);
+        }
+        .landing-orbit.orbit-b {
+            width: 78%;
+            height: 62%;
+            right: 0;
+            bottom: 2%;
+            transform: rotate(-12deg);
+        }
+        .mockup-window {
+            position: relative;
+            z-index: 2;
+            border-radius: 1.25rem;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.18);
+            background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(239,246,255,0.94));
+            box-shadow: 0 24px 50px rgba(15, 23, 42, 0.22);
+        }
+        .mockup-topbar {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.72rem 0.9rem;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+            background: rgba(255,255,255,0.92);
+        }
+        .mock-dot {
+            width: 0.48rem;
+            height: 0.48rem;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.18);
+        }
+        .mockup-url {
+            margin-left: auto;
+            color: #334155;
+            font-size: 0.82rem;
+            font-weight: 700;
+        }
+        .mockup-content {
+            padding: 1rem;
+            background: linear-gradient(180deg, #f8fbff 0%, #e8f1ff 100%);
+        }
+        .mockup-hero-banner {
+            border-radius: 1rem;
+            padding: 1rem;
+            background: linear-gradient(135deg, #1d4ed8 0%, #60a5fa 100%);
+            color: #eff6ff;
+            margin-bottom: 0.85rem;
+        }
+        .mockup-hero-title {
+            font-size: 1.15rem;
+            font-weight: 800;
+            margin-bottom: 0.2rem;
+        }
+        .mockup-hero-copy {
+            font-size: 0.88rem;
+            color: #dbeafe;
+        }
+        .mockup-hero-grid,
+        .mockup-mini-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+        }
+        .mockup-hero-card,
+        .mockup-mini-card {
+            border-radius: 0.95rem;
+            padding: 0.8rem 0.85rem;
+            background: rgba(255,255,255,0.88);
+            border: 1px solid rgba(96, 165, 250, 0.18);
+        }
+        .mockup-hero-card span,
+        .mockup-mini-card span {
+            display: block;
+            color: #64748b;
+            font-size: 0.76rem;
+            margin-bottom: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .mockup-hero-card strong,
+        .mockup-mini-card strong {
+            color: #0f172a;
+            font-size: 1.05rem;
+            font-weight: 800;
+        }
+        .mockup-stat-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.55rem;
+            margin-bottom: 0.8rem;
+        }
+        .mockup-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.48rem 0.72rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.85);
+            border: 1px solid rgba(96, 165, 250, 0.16);
+            color: #334155;
+            font-size: 0.76rem;
+            font-weight: 700;
+        }
+        .mockup-pill.strong {
+            background: rgba(59, 130, 246, 0.16);
+            color: #1d4ed8;
+        }
+        .mockup-table-card,
+        .mockup-stack {
+            border-radius: 1rem;
+            overflow: hidden;
+            background: rgba(255,255,255,0.90);
+            border: 1px solid rgba(96, 165, 250, 0.14);
+        }
+        .mockup-table-header,
+        .mockup-table-row,
+        .mockup-stack-row {
+            display: grid;
+            grid-template-columns: 1.4fr 0.45fr 0.7fr;
+            gap: 0.75rem;
+            padding: 0.72rem 0.85rem;
+            align-items: center;
+        }
+        .mockup-table-header {
+            background: rgba(29, 78, 216, 0.08);
+            color: #1e3a8a;
+            font-size: 0.74rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .mockup-table-row {
+            color: #0f172a;
+            font-size: 0.83rem;
+            border-top: 1px solid rgba(15, 23, 42, 0.05);
+        }
+        .mockup-stack-row {
+            grid-template-columns: 1fr 0.35fr;
+            color: #0f172a;
+            font-size: 0.84rem;
+            border-top: 1px solid rgba(15, 23, 42, 0.05);
+        }
+        .mockup-rank-card {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            border-radius: 1rem;
+            padding: 0.85rem;
+            background: rgba(255,255,255,0.90);
+            border: 1px solid rgba(96, 165, 250, 0.18);
+            margin-bottom: 0.8rem;
+        }
+        .rank-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #1d4ed8 0%, #60a5fa 100%);
+            color: #eff6ff;
+            font-weight: 800;
+        }
+        .mockup-float-card {
+            position: absolute;
+            z-index: 3;
+            min-width: 170px;
+            padding: 0.8rem 0.9rem;
+            border-radius: 1rem;
+            background: rgba(255,255,255,0.96);
+            border: 1px solid rgba(255,255,255,0.55);
+            box-shadow: 0 18px 38px rgba(15, 23, 42, 0.14);
+        }
+        .mockup-float-card.top-right {
+            top: 1.45rem;
+            right: -0.25rem;
+        }
+        .mockup-float-card.bottom-left {
+            left: 0;
+            bottom: 0.25rem;
+        }
+        .float-kicker {
+            color: #64748b;
+            font-size: 0.74rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            margin-bottom: 0.18rem;
+        }
+        .float-title {
+            color: #0f172a;
+            font-size: 0.95rem;
+            font-weight: 800;
+        }
         .landing-auth-shell {
             border: 1px solid var(--brand-border);
             border-radius: 1.15rem;
@@ -3481,6 +3852,18 @@ def page_auth():
             .landing-feature-grid,
             .landing-outcome-grid {
                 grid-template-columns: 1fr;
+            }
+            .landing-feature-layout {
+                grid-template-columns: 1fr;
+            }
+            .mockup-float-card.top-right,
+            .mockup-float-card.bottom-left {
+                position: relative;
+                top: auto;
+                right: auto;
+                left: auto;
+                bottom: auto;
+                margin-top: 0.75rem;
             }
         }
         </style>
@@ -3561,7 +3944,7 @@ def page_auth():
                 unsafe_allow_html=True,
             )
         with hero_right:
-            st.markdown(auth_space_scene_html(), unsafe_allow_html=True)
+            st.markdown(landing_marketing_mockup_html("hero"), unsafe_allow_html=True)
 
         st.markdown(
             """
@@ -3610,25 +3993,26 @@ def page_auth():
             unsafe_allow_html=True,
         )
 
-        st.markdown(
-            """
-            <div class="landing-band deep landing-product">
-                <div class="landing-product-title">Generate List</div>
-                <div class="landing-product-copy">Build a buyer-company list from public market signals.</div>
-                <div class="landing-product-bullets">• matched services<br>• posting evidence<br>• exportable output</div>
-            </div>
-            <div class="landing-band soft landing-product">
-                <div class="landing-product-title">Next Steps</div>
-                <div class="landing-product-copy">See which companies deserve attention first.</div>
-                <div class="landing-product-bullets">• top companies<br>• hiring patterns<br>• deeper company view</div>
-            </div>
-            <div class="landing-band clear landing-product">
-                <div class="landing-product-title">Potential Expansions</div>
-                <div class="landing-product-copy">See which adjacent scopes keep showing up.</div>
-                <div class="landing-product-bullets">• service gaps<br>• interested companies<br>• pattern reporting</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        render_landing_feature_band(
+            "Generate List",
+            "Build a buyer-company list from public market signals.",
+            ["matched services", "posting evidence", "exportable output"],
+            kind="list",
+            tone="deep",
+        )
+        render_landing_feature_band(
+            "Next Steps",
+            "See which companies deserve attention first.",
+            ["top companies", "hiring patterns", "deeper company view"],
+            kind="next",
+            tone="soft",
+        )
+        render_landing_feature_band(
+            "Potential Expansions",
+            "See which adjacent scopes keep showing up.",
+            ["service gaps", "interested companies", "pattern reporting"],
+            kind="expansion",
+            tone="clear",
         )
 
         st.markdown(
