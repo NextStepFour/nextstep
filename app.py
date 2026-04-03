@@ -90,15 +90,12 @@ COMPANY_COLUMNS = [
 ]
 EXPANSION_COLUMNS = [
     "suggested_service",
-    "market_frequency_score",
+    "service_description",
     "supporting_signal_count",
-    "expansion_priority",
-    "adjacency_type",
-    "why_it_is_relevant",
-    "sample_companies",
+    "connected_current_services",
+    "companies_showing_interest",
     "sample_job_titles",
-    "helpful_for",
-    "go_to_market_note",
+    "sample_responsibilities",
 ]
 DISPLAY_NAME_MAP = {
     "date_generated": "Date Generated",
@@ -138,15 +135,11 @@ DISPLAY_NAME_MAP = {
     "service_name": "Service Name",
     "service_description": "Service Description",
     "suggested_service": "Suggested Service",
-    "market_frequency_score": "Market Frequency Score",
     "supporting_signal_count": "Supporting Signal Count",
-    "expansion_priority": "Expansion Priority",
-    "adjacency_type": "Adjacency Type",
-    "why_it_is_relevant": "Why It Is Relevant",
-    "sample_companies": "Sample Companies",
+    "connected_current_services": "Connected Current Services",
+    "companies_showing_interest": "Companies Showing Interest",
     "sample_job_titles": "Sample Job Titles",
-    "helpful_for": "Helpful For",
-    "go_to_market_note": "Go To Market Note",
+    "sample_responsibilities": "Typical Responsibilities Seen",
     "source_run_id": "Source Run ID",
     "source_run_name": "Source Run Name",
     "source_run_created_at": "Source Run Created At",
@@ -532,7 +525,7 @@ RESPONSE_SCHEMA = {
 
 EXPANSION_PROMPT_TEMPLATE = """You are a market intelligence engine for solar service sales strategy.
 
-Your task is to review a client's current service coverage and recent market evidence, then suggest peripheral service expansions that appear to be requested by the market but are not explicitly covered by the current service set.
+Your task is to review a client's current service coverage and recent market evidence, then identify service gaps the market appears to be requesting that are not explicitly covered by the current service set.
 
 Current service profiles:
 {{CURRENT_SERVICES}}
@@ -545,28 +538,26 @@ Return valid JSON only using this schema:
   "expansions": [
     {
       "suggested_service": null,
-      "market_frequency_score": 0,
+      "service_description": null,
       "supporting_signal_count": 0,
-      "expansion_priority": "High|Medium|Low",
-      "adjacency_type": null,
-      "why_it_is_relevant": null,
-      "sample_companies": [],
+      "connected_current_services": [],
+      "companies_showing_interest": [],
       "sample_job_titles": [],
-      "helpful_for": null,
-      "go_to_market_note": null
+      "sample_responsibilities": []
     }
   ]
 }
 
 Rules:
-- Suggest services that are adjacent or peripheral to the current service set
+- Suggest services that are adjacent or related to the current service set
 - Do not repeat services already explicitly covered
 - Base suggestions only on evidence shown in the market evidence
-- market_frequency_score must be 0 to 100
 - supporting_signal_count must be an integer
-- expansion_priority must be one of: High, Medium, Low
-- sample_companies must be a list
+- service_description should be a short factual description of the suggested service based on repeated job-posting language
+- connected_current_services must be a list of current saved services this suggested expansion most closely connects to
+- companies_showing_interest must be a list of companies whose postings suggest demand for the suggested service
 - sample_job_titles must be a list
+- sample_responsibilities must be a list
 - Return 3 to 8 expansion ideas when possible
 - Return JSON only"""
 
@@ -632,30 +623,21 @@ EXPANSION_SCHEMA = {
                 "additionalProperties": False,
                 "properties": {
                     "suggested_service": {"type": ["string", "null"]},
-                    "market_frequency_score": {"type": "integer", "minimum": 0, "maximum": 100},
+                    "service_description": {"type": ["string", "null"]},
                     "supporting_signal_count": {"type": "integer", "minimum": 0},
-                    "expansion_priority": {
-                        "type": "string",
-                        "enum": ["High", "Medium", "Low"],
-                    },
-                    "adjacency_type": {"type": ["string", "null"]},
-                    "why_it_is_relevant": {"type": ["string", "null"]},
-                    "sample_companies": {"type": "array", "items": {"type": "string"}},
+                    "connected_current_services": {"type": "array", "items": {"type": "string"}},
+                    "companies_showing_interest": {"type": "array", "items": {"type": "string"}},
                     "sample_job_titles": {"type": "array", "items": {"type": "string"}},
-                    "helpful_for": {"type": ["string", "null"]},
-                    "go_to_market_note": {"type": ["string", "null"]},
+                    "sample_responsibilities": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": [
                     "suggested_service",
-                    "market_frequency_score",
+                    "service_description",
                     "supporting_signal_count",
-                    "expansion_priority",
-                    "adjacency_type",
-                    "why_it_is_relevant",
-                    "sample_companies",
+                    "connected_current_services",
+                    "companies_showing_interest",
                     "sample_job_titles",
-                    "helpful_for",
-                    "go_to_market_note",
+                    "sample_responsibilities",
                 ],
             },
         }
@@ -1520,8 +1502,8 @@ def analyze_expansions(api_client, selected_services_df, evidence_df):
         return raw_json, pd.DataFrame(columns=EXPANSION_COLUMNS)
 
     expansion_df = expansion_df[EXPANSION_COLUMNS].sort_values(
-        ["market_frequency_score", "supporting_signal_count"],
-        ascending=[False, False],
+        ["supporting_signal_count", "suggested_service"],
+        ascending=[False, True],
     ).reset_index(drop=True)
     return raw_json, expansion_df
 
@@ -1645,8 +1627,10 @@ def format_lists_for_display(df):
         "why_it_matches",
         "matching_responsibilities",
         "matching_keywords",
-        "sample_companies",
+        "connected_current_services",
+        "companies_showing_interest",
         "sample_job_titles",
+        "sample_responsibilities",
     ]:
         if column in display.columns:
             display[column] = display[column].apply(lambda value: "; ".join(value) if isinstance(value, list) else value)
@@ -2050,14 +2034,12 @@ def expansion_pdf_data(expansion_df, meta):
         story.extend(
             [
                 Paragraph(escape(str(row["suggested_service"] or "Unknown expansion")), styles["Heading2"]),
-                Paragraph(escape(f"Market frequency score: {row['market_frequency_score']}"), styles["Normal"]),
-                Paragraph(escape(f"Supporting signal count: {row['supporting_signal_count']} | Priority: {row['expansion_priority']}"), styles["Normal"]),
-                Paragraph(escape(f"Adjacency type: {row['adjacency_type'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Why it is relevant: {row['why_it_is_relevant'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Helpful for: {row['helpful_for'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Go-to-market note: {row['go_to_market_note'] or 'Unknown'}"), styles["Normal"]),
-                Paragraph(escape(f"Sample companies: {row['sample_companies']}"), styles["Normal"]),
-                Paragraph(escape(f"Sample job titles: {row['sample_job_titles']}"), styles["Normal"]),
+                Paragraph(escape(f"Service description: {row['service_description'] or 'Unknown'}"), styles["Normal"]),
+                Paragraph(escape(f"Frequency: {row['supporting_signal_count']}"), styles["Normal"]),
+                Paragraph(escape(f"Connected current services: {row['connected_current_services']}"), styles["Normal"]),
+                Paragraph(escape(f"Companies showing interest: {row['companies_showing_interest']}"), styles["Normal"]),
+                Paragraph(escape(f"Typical job titles seen: {row['sample_job_titles']}"), styles["Normal"]),
+                Paragraph(escape(f"Typical responsibilities seen: {row['sample_responsibilities']}"), styles["Normal"]),
                 Spacer(1, 10),
             ]
         )
@@ -3071,7 +3053,7 @@ def page_next_steps():
 def page_potential_expansions():
     st.title("Potential Expansions")
     st.write(
-        "Select 3 or more saved services to identify adjacent scopes the market appears to be requesting that are not explicitly covered in the current service set."
+        "Select 3 or more saved services to identify market-requested service gaps that are not explicitly covered in the current service set."
     )
     svc = services_df()
     if svc.empty:
@@ -3135,12 +3117,123 @@ def page_potential_expansions():
             remaining = add_credits(-credits_needed)
             display_expansion_df = format_lists_for_display(expansion_df)
             st.success(f"Expansion analysis complete. Credits remaining: {remaining}")
-            st.dataframe(pretty_df(display_expansion_df), use_container_width=True)
+
+            st.markdown(
+                """
+                <style>
+                .expansion-wrap {
+                    max-width: 1080px;
+                    margin: 0 auto;
+                }
+                .expansion-summary-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, minmax(0, 1fr));
+                    gap: 0.8rem;
+                    margin-bottom: 1rem;
+                }
+                .expansion-summary-card {
+                    border: 1px solid rgba(255,255,255,0.08);
+                    border-radius: 0.95rem;
+                    background: rgba(15, 23, 42, 0.42);
+                    padding: 0.9rem 1rem;
+                }
+                .expansion-summary-label {
+                    font-size: 0.76rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    color: #93c5fd;
+                    margin-bottom: 0.35rem;
+                }
+                .expansion-summary-value {
+                    font-size: 1.3rem;
+                    font-weight: 800;
+                    color: #eff6ff;
+                    line-height: 1.15;
+                }
+                .expansion-summary-subvalue {
+                    margin-top: 0.3rem;
+                    color: #cbd5e1;
+                    font-size: 0.88rem;
+                    line-height: 1.45;
+                }
+                .expansion-card {
+                    border: 1px solid var(--brand-border);
+                    border-radius: 1rem;
+                    padding: 1.1rem 1.1rem 0.95rem 1.1rem;
+                    background: linear-gradient(180deg, rgba(96, 165, 250, 0.08), rgba(255,255,255,0.02));
+                    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+                    margin-bottom: 1rem;
+                }
+                .expansion-card-title {
+                    font-size: 1.2rem;
+                    font-weight: 800;
+                    color: #eff6ff;
+                    margin-bottom: 0.7rem;
+                }
+                .expansion-card-section {
+                    margin-bottom: 0.85rem;
+                }
+                .expansion-card-label {
+                    font-size: 0.76rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    color: #93c5fd;
+                    margin-bottom: 0.22rem;
+                }
+                .expansion-card-value {
+                    color: #dbeafe;
+                    line-height: 1.58;
+                }
+                @media (max-width: 900px) {
+                    .expansion-summary-grid {
+                        grid-template-columns: 1fr 1fr;
+                    }
+                }
+                @media (max-width: 640px) {
+                    .expansion-summary-grid {
+                        grid-template-columns: 1fr;
+                    }
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            most_repeated_gap = safe_text(display_expansion_df.iloc[0]["suggested_service"]) if not display_expansion_df.empty else "Unknown"
+            st.markdown('<div class="expansion-wrap">', unsafe_allow_html=True)
+            st.markdown(
+                (
+                    '<div class="expansion-summary-grid">'
+                    f'<div class="expansion-summary-card"><div class="expansion-summary-label">Expansion Gaps Found</div><div class="expansion-summary-value">{len(display_expansion_df)}</div><div class="expansion-summary-subvalue">Distinct service gaps identified from current market evidence.</div></div>'
+                    f'<div class="expansion-summary-card"><div class="expansion-summary-label">Most Repeated Gap</div><div class="expansion-summary-value">{escape(most_repeated_gap)}</div><div class="expansion-summary-subvalue">The expansion idea appearing most often in the reviewed signals.</div></div>'
+                    f'<div class="expansion-summary-card"><div class="expansion-summary-label">Services Analyzed</div><div class="expansion-summary-value">{len(selected_rows)}</div><div class="expansion-summary-subvalue">Saved services included in this expansion review.</div></div>'
+                    f'<div class="expansion-summary-card"><div class="expansion-summary-label">Market Signals Reviewed</div><div class="expansion-summary-value">{len(evidence_df)}</div><div class="expansion-summary-subvalue">Public postings and related signals used to generate the gaps below.</div></div>'
+                    '</div>'
+                ),
+                unsafe_allow_html=True,
+            )
+
+            ranked_table_df = display_expansion_df[
+                [
+                    "suggested_service",
+                    "service_description",
+                    "supporting_signal_count",
+                    "companies_showing_interest",
+                ]
+            ].copy()
+            ranked_table_df.columns = [
+                "Suggested Expansion",
+                "Service Description",
+                "Frequency",
+                "Companies Showing Interest",
+            ]
+            st.markdown("**Top Expansion Opportunities**")
+            st.dataframe(pretty_df(ranked_table_df), use_container_width=True, hide_index=True)
 
             services_text = "; ".join(selected_rows["service_name"].tolist())
             st.download_button(
                 "Download potential expansions as CSV",
-                data=csv_data(display_expansion_df),
+                data=csv_data(ranked_table_df),
                 file_name="nextstepsignal_potential_expansions.csv",
                 mime="text/csv",
             )
@@ -3160,11 +3253,30 @@ def page_potential_expansions():
                 mime="application/pdf",
             )
 
+            st.subheader("Expansion Reports")
+            for idx, (_, row) in enumerate(display_expansion_df.iterrows(), start=1):
+                with st.expander(
+                    f"#{idx} {safe_text(row['suggested_service'], 'Unknown expansion')} | {safe_text(str(row['supporting_signal_count']), '0')} signals",
+                    expanded=False,
+                ):
+                    st.markdown(
+                        (
+                            '<div class="expansion-card">'
+                            f'<div class="expansion-card-title">{escape(safe_text(row["suggested_service"], "Unknown expansion"))}</div>'
+                            f'<div class="expansion-card-section"><div class="expansion-card-label">Service Description</div><div class="expansion-card-value">{escape(safe_text(row["service_description"], "No service description captured."))}</div></div>'
+                            f'<div class="expansion-card-section"><div class="expansion-card-label">Companies Showing Interest</div><div class="expansion-card-value">{escape(safe_text(row["companies_showing_interest"], "No companies captured."))}</div></div>'
+                            f'<div class="expansion-card-section"><div class="expansion-card-label">Typical Job Titles / Responsibilities Seen</div><div class="expansion-card-value"><strong>Job Titles:</strong> {escape(safe_text(row["sample_job_titles"], "No job titles captured."))}<br><strong>Responsibilities:</strong> {escape(safe_text(row["sample_responsibilities"], "No responsibilities captured."))}</div></div>'
+                            '</div>'
+                        ),
+                        unsafe_allow_html=True,
+                    )
+
             with st.expander("Supporting evidence used for expansion analysis"):
                 st.dataframe(format_lists_for_display(evidence_df), use_container_width=True)
 
             with st.expander("Raw expansion JSON"):
                 st.code(raw_json, language="json")
+            st.markdown("</div>", unsafe_allow_html=True)
 
         except ValueError as exc:
             st.error(str(exc))
