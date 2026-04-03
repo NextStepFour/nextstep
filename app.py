@@ -1736,8 +1736,12 @@ def build_next_steps_company_table(evidence_df):
 
     for company, group in temp.groupby("company_name", dropna=False):
         job_rows = group.drop_duplicates(subset=["source_url", "job_title"], keep="first").copy()
-        posting_count = len(job_rows)
-        if posting_count == 0:
+        related_job_rows = job_rows[~job_rows["match_type"].isin(["None"])].copy()
+        relevant_job_rows = related_job_rows[related_job_rows["match_type"].isin(["Direct", "Peripheral"])].copy()
+
+        related_posting_count = len(related_job_rows)
+        relevant_posting_count = len(relevant_job_rows)
+        if related_posting_count == 0:
             continue
 
         matched_services = flatten_unique(group["matched_service"].tolist())
@@ -1751,46 +1755,46 @@ def build_next_steps_company_table(evidence_df):
         salary_numeric_values = [value for value in [parse_salary_high_value(s) for s in salary_values] if value is not None]
         salary_signal = salary_values[0] if salary_values else None
 
-        recent_dates = job_rows["posted_date_parsed"].dropna()
+        recent_dates = related_job_rows["posted_date_parsed"].dropna()
         most_recent_posted = recent_dates.max() if not recent_dates.empty else pd.NaT
         if pd.notna(most_recent_posted):
             age_days = max(0, (now_ts - most_recent_posted.normalize()).days)
             if age_days <= 7:
-                recency_points = 35
+                recency_rank = 5
             elif age_days <= 14:
-                recency_points = 28
+                recency_rank = 4
             elif age_days <= 30:
-                recency_points = 20
+                recency_rank = 3
             elif age_days <= 60:
-                recency_points = 12
+                recency_rank = 2
             else:
-                recency_points = 6
+                recency_rank = 1
             most_recent_posted_text = most_recent_posted.strftime("%m/%d/%y")
         else:
-            recency_points = 0
+            recency_rank = 0
             most_recent_posted_text = "Unknown"
 
-        posting_points = min(posting_count, 5) * 14
-        service_points = min(len(matched_services), 3) * 5
-        salary_points = 0
+        salary_rank = 0
         if salary_values:
-            salary_points += 8
+            salary_rank += 1
         highest_salary = max(salary_numeric_values) if salary_numeric_values else None
         if highest_salary is not None:
             if highest_salary >= 150000:
-                salary_points += 10
+                salary_rank += 4
             elif highest_salary >= 100000:
-                salary_points += 7
+                salary_rank += 3
             elif highest_salary >= 70000:
-                salary_points += 4
+                salary_rank += 2
             else:
-                salary_points += 2
-
-        priority_score = posting_points + recency_points + salary_points + service_points
+                salary_rank += 1
 
         why_parts = [
-            f"{posting_count} relevant posting{'s' if posting_count != 1 else ''} found",
+            f"{relevant_posting_count} relevant posting{'s' if relevant_posting_count != 1 else ''} found",
         ]
+        if related_posting_count > relevant_posting_count:
+            why_parts.append(
+                f"{related_posting_count} total related posting{'s' if related_posting_count != 1 else ''} found"
+            )
         if most_recent_posted_text != "Unknown":
             why_parts.append(f"most recent posting dated {most_recent_posted_text}")
         if salary_signal:
@@ -1805,7 +1809,8 @@ def build_next_steps_company_table(evidence_df):
         rows.append(
             {
                 "buyer_company": safe_text(company, "Unknown Company"),
-                "relevant_posting_count": posting_count,
+                "relevant_posting_count": relevant_posting_count,
+                "related_posting_count": related_posting_count,
                 "most_recent_posted_date": most_recent_posted_text,
                 "salary_signal": salary_signal or "Not disclosed",
                 "matched_services": "; ".join(matched_services),
@@ -1813,7 +1818,8 @@ def build_next_steps_company_table(evidence_df):
                 "why_highlighted": ". ".join(why_parts) + ".",
                 "suggested_next_step": suggested_next_step,
                 "source_urls": " | ".join(source_urls),
-                "_priority_score": priority_score,
+                "_recency_rank": recency_rank,
+                "_salary_rank": salary_rank,
             }
         )
 
@@ -1821,8 +1827,8 @@ def build_next_steps_company_table(evidence_df):
         return pd.DataFrame()
 
     return pd.DataFrame(rows).sort_values(
-        ["_priority_score", "relevant_posting_count", "buyer_company"],
-        ascending=[False, False, True],
+        ["relevant_posting_count", "related_posting_count", "_recency_rank", "_salary_rank", "buyer_company"],
+        ascending=[False, False, False, False, True],
     ).reset_index(drop=True)
 
 
