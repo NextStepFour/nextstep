@@ -3328,7 +3328,7 @@ def page_auth():
             gap: 1rem;
             margin-bottom: 1rem;
             position: sticky;
-            top: 0.65rem;
+            top: 0.75rem;
             z-index: 50;
             padding: 0.7rem 0.9rem;
             border: 1px solid rgba(255,255,255,0.08);
@@ -3338,7 +3338,7 @@ def page_auth():
             box-shadow: 0 12px 34px rgba(15, 23, 42, 0.20);
         }
         .landing-brand {
-            font-size: 1.2rem;
+            font-size: 1.32rem;
             font-weight: 850;
             color: #eff6ff;
             letter-spacing: -0.01em;
@@ -4117,7 +4117,7 @@ def page_auth():
                 border-radius: 1.1rem;
             }
             .landing-brand {
-                font-size: 1.06rem;
+                font-size: 1.16rem;
             }
             .landing-topbar-cta {
                 min-width: 136px;
