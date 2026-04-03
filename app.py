@@ -2534,13 +2534,13 @@ def page_billing(user):
     if stripe_ready():
         left, right = st.columns(2)
         with left:
-            if st.button("Refresh Billing Status"):
+            if st.button("Refresh Billing Status", type="primary"):
                 updated = sync_user_billing(user)
                 set_current_user(updated)
                 st.success("Billing status refreshed.")
                 st.rerun()
         with right:
-            if st.button("Open Billing Portal"):
+            if st.button("Open Billing Portal", type="primary"):
                 try:
                     url = billing_portal_url(user)
                     st.markdown(f"[Open Stripe Billing Portal]({url})")
@@ -2645,7 +2645,8 @@ def page_generate():
     )
     st.caption("Search time can still vary because live web search depends on outside websites and OpenAI response time.")
 
-    if st.button("Generate and save list", type="primary"):
+    generate_list_label = f"Generate and Save List (3-{result_limit} credits)"
+    if st.button(generate_list_label, type="primary"):
         if not selected:
             st.error("Please select at least one saved service.")
             return
@@ -3195,7 +3196,8 @@ def page_potential_expansions():
         )
     )
 
-    if st.button("Generate expansion ideas", type="primary"):
+    generate_expansions_label = f"Generate Expansion Ideas ({credits_needed} credits)"
+    if st.button(generate_expansions_label, type="primary"):
         if len(selected) < 3:
             st.error("Please select at least 3 saved services.")
             return
