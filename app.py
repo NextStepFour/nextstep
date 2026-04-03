@@ -549,6 +549,57 @@ Rules:
 - Return 3 to 8 expansion ideas when possible
 - Return JSON only"""
 
+COMPANY_DEEP_DIVE_PROMPT_TEMPLATE = """You are a market intelligence engine for service sales pursuit strategy.
+
+Your task is to search the public web for additional U.S. job postings from a single company that may help explain broader hiring demand around a service opportunity.
+
+Target company:
+{{COMPANY_NAME}}
+
+Service context:
+{{MATCHED_SERVICES}}
+
+Known posting hints from earlier analysis:
+{{KNOWN_POSTINGS}}
+
+Location hints already seen:
+{{LOCATION_HINTS}}
+
+Search public sources from the last 3 months. Prioritize official employer career pages, structured ATS pages, and publicly visible structured job board pages.
+
+Return valid JSON only using this schema:
+{
+  "results": [
+    {
+      "company_name": null,
+      "job_title": null,
+      "base_salary": null,
+      "location": null,
+      "source_type": null,
+      "opportunity_status": "Open|Filled|Unknown",
+      "posted_date": null,
+      "relevance_bucket": "Directly relevant|Adjacent|Broader company context",
+      "why_it_matters": null,
+      "source_url": null
+    }
+  ]
+}
+
+Rules:
+- Search the internet first before answering
+- Only include public web results you actually found
+- Only include results from the same company
+- Only include U.S. results
+- Only include results that appear to be from the last 3 months
+- Include up to 12 results when available
+- Use the service context to decide whether a role is Directly relevant, Adjacent, or Broader company context
+- Directly relevant = clearly overlaps with the service context
+- Adjacent = nearby function that supports or surrounds the service context
+- Broader company context = not a direct fit, but still helps explain organizational hiring around the opportunity
+- base_salary should include only explicit base salary from the posting or source page
+- If a field is unknown, return null
+- Return JSON only"""
+
 EXPANSION_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -589,6 +640,51 @@ EXPANSION_SCHEMA = {
         }
     },
     "required": ["expansions"],
+}
+
+COMPANY_DEEP_DIVE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "results": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "company_name": {"type": ["string", "null"]},
+                    "job_title": {"type": ["string", "null"]},
+                    "base_salary": {"type": ["string", "null"]},
+                    "location": {"type": ["string", "null"]},
+                    "source_type": {"type": ["string", "null"]},
+                    "opportunity_status": {
+                        "type": "string",
+                        "enum": ["Open", "Filled", "Unknown"],
+                    },
+                    "posted_date": {"type": ["string", "null"]},
+                    "relevance_bucket": {
+                        "type": "string",
+                        "enum": ["Directly relevant", "Adjacent", "Broader company context"],
+                    },
+                    "why_it_matters": {"type": ["string", "null"]},
+                    "source_url": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "company_name",
+                    "job_title",
+                    "base_salary",
+                    "location",
+                    "source_type",
+                    "opportunity_status",
+                    "posted_date",
+                    "relevance_bucket",
+                    "why_it_matters",
+                    "source_url",
+                ],
+            },
+        }
+    },
+    "required": ["results"],
 }
 
 
@@ -1224,6 +1320,120 @@ def search_service(api_client, service_row, location_filter, time_window, high_v
     return raw_responses, dedupe_search_records(collected_records)
 
 
+def build_company_deep_dive_prompt(company_name, matched_services_text, company_evidence_df):
+    known_titles = flatten_unique(company_evidence_df["job_title"].tolist())[:6]
+    location_hints = flatten_unique(company_evidence_df["location"].tolist())[:5]
+    prompt = COMPANY_DEEP_DIVE_PROMPT_TEMPLATE
+    prompt = prompt.replace("{{COMPANY_NAME}}", safe_text(company_name, "Unknown Company"))
+    prompt = prompt.replace("{{MATCHED_SERVICES}}", matched_services_text or "No matched services recorded")
+    prompt = prompt.replace(
+        "{{KNOWN_POSTINGS}}",
+        "\n".join(f"- {title}" for title in known_titles) if known_titles else "- No known postings captured",
+    )
+    prompt = prompt.replace(
+        "{{LOCATION_HINTS}}",
+        "; ".join(location_hints) if location_hints else "No location hints captured",
+    )
+    return prompt
+
+
+def normalize_company_deep_dive_record(item, company_name):
+    row = dict(item)
+    row["company_name"] = row.get("company_name") or company_name
+    for column in [
+        "company_name",
+        "job_title",
+        "base_salary",
+        "location",
+        "source_type",
+        "opportunity_status",
+        "posted_date",
+        "relevance_bucket",
+        "why_it_matters",
+        "source_url",
+    ]:
+        row.setdefault(column, None)
+    return row
+
+
+def dedupe_company_deep_dive_records(records):
+    deduped = {}
+    for row in records:
+        key = (
+            safe_text(row.get("source_url")),
+            safe_text(row.get("company_name")),
+            safe_text(row.get("job_title")),
+        )
+        if key not in deduped:
+            deduped[key] = row
+    return list(deduped.values())
+
+
+def search_company_deep_dive(api_client, company_name, matched_services_text, company_evidence_df):
+    response = api_client.responses.create(
+        model=DISCOVERY_MODEL,
+        reasoning={"effort": "low"},
+        tools=[
+            {
+                "type": "web_search",
+                "user_location": {"type": "approximate", "country": "US", "timezone": "America/New_York"},
+            }
+        ],
+        tool_choice="auto",
+        include=["web_search_call.action.sources"],
+        input=build_company_deep_dive_prompt(company_name, matched_services_text, company_evidence_df),
+        text={
+            "format": {
+                "type": "json_schema",
+                "name": "nextstep_company_deep_dive",
+                "strict": True,
+                "schema": COMPANY_DEEP_DIVE_SCHEMA,
+            }
+        },
+    )
+    raw_json = response.output_text if getattr(response, "output_text", None) else ""
+    try:
+        parsed = json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        raise ValueError("The API returned invalid JSON for the company deep-dive search.") from exc
+
+    records = [
+        normalize_company_deep_dive_record(item, company_name)
+        for item in parsed.get("results", [])
+    ]
+    df = pd.DataFrame(dedupe_company_deep_dive_records(records))
+    if df.empty:
+        return raw_json, df
+
+    existing_keys = {
+        (
+            safe_text(row.get("source_url")),
+            safe_text(row.get("company_name")),
+            safe_text(row.get("job_title")),
+        )
+        for _, row in company_evidence_df.iterrows()
+    }
+    df = df[
+        ~df.apply(
+            lambda row: (
+                safe_text(row.get("source_url")),
+                safe_text(row.get("company_name")),
+                safe_text(row.get("job_title")),
+            )
+            in existing_keys,
+            axis=1,
+        )
+    ].copy()
+    if df.empty:
+        return raw_json, df
+
+    df["posted_date_parsed"] = pd.to_datetime(df["posted_date"], errors="coerce")
+    return raw_json, df.sort_values(
+        ["posted_date_parsed", "job_title"],
+        ascending=[False, True],
+    ).drop(columns=["posted_date_parsed"]).reset_index(drop=True)
+
+
 def build_expansion_context(selected_services_df, evidence_df):
     services_payload = []
     for _, row in selected_services_df.iterrows():
@@ -1662,6 +1872,26 @@ def render_next_steps_job_block(job_row):
             f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Likely Service Need:</strong> {escape(safe_text(job_row.get("likely_service_need"), "Not specified"))}</div>'
             f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Evidence:</strong> {escape(why_text)}</div>'
             f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Relevant Responsibilities:</strong> {escape(responsibilities_text)}</div>'
+            '</div>'
+        ),
+        unsafe_allow_html=True,
+    )
+    st.markdown(source_line)
+
+
+def render_company_deep_dive_job_block(job_row):
+    source_url = safe_text(job_row.get("source_url"))
+    source_line = f"[Open source posting]({source_url})" if source_url else "No source URL saved."
+    st.markdown(
+        (
+            '<div style="border:1px solid rgba(255,255,255,0.08); border-radius:0.9rem; padding:0.85rem 0.95rem; '
+            'background:rgba(255,255,255,0.02); margin-bottom:0.7rem;">'
+            f'<div style="font-size:1rem; font-weight:700; color:#eff6ff; margin-bottom:0.35rem;">{escape(safe_text(job_row.get("job_title"), "Unknown job title"))}</div>'
+            f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Relevance:</strong> {escape(safe_text(job_row.get("relevance_bucket"), "Unknown"))}</div>'
+            f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Base Salary:</strong> {escape(safe_text(job_row.get("base_salary"), "Not disclosed"))}</div>'
+            f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Posted Date:</strong> {escape(safe_text(job_row.get("posted_date"), "Unknown"))}</div>'
+            f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Location:</strong> {escape(safe_text(job_row.get("location"), "Unknown"))}</div>'
+            f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Why It Matters:</strong> {escape(safe_text(job_row.get("why_it_matters"), "No additional context captured."))}</div>'
             '</div>'
         ),
         unsafe_allow_html=True,
@@ -2424,6 +2654,7 @@ def page_next_steps():
 
     top_company_count = min(5, len(company_priority_df))
     top_companies_df = company_priority_df.head(top_company_count).copy()
+    deep_dive_cache = st.session_state.setdefault("company_deep_dive_cache", {})
 
     stat1, stat2, stat3, stat4 = st.columns(4)
     stat1.metric("Companies Reviewed", len(company_priority_df))
@@ -2513,6 +2744,79 @@ def page_next_steps():
         else:
             for _, job_row in other_jobs_df.iterrows():
                 render_next_steps_job_block(job_row)
+
+        st.markdown('<div class="nextsteps-section-label">Company Deep Dive</div>', unsafe_allow_html=True)
+        matched_services_text = safe_text(company_row.get("matched_services"))
+        company_cache_key = f"{safe_text(company_name)}::{matched_services_text}"
+        deep_dive_entry = deep_dive_cache.get(company_cache_key)
+
+        if st.button(
+            f"Expand company hiring view for {company_name}",
+            key=f"expand_company_view_{company_cache_key}",
+        ):
+            try:
+                with st.spinner(f"Searching for additional public postings from {company_name}..."):
+                    api_client = client()
+                    raw_json, deep_dive_df = search_company_deep_dive(
+                        api_client,
+                        company_name,
+                        matched_services_text,
+                        company_evidence_df,
+                    )
+                    deep_dive_entry = {
+                        "raw_json": raw_json,
+                        "records": deep_dive_df.to_dict(orient="records"),
+                        "error": None,
+                    }
+                    deep_dive_cache[company_cache_key] = deep_dive_entry
+            except Exception as exc:
+                deep_dive_entry = {
+                    "raw_json": "",
+                    "records": [],
+                    "error": str(exc),
+                }
+                deep_dive_cache[company_cache_key] = deep_dive_entry
+
+        deep_dive_entry = deep_dive_cache.get(company_cache_key)
+        if not deep_dive_entry:
+            st.caption("Run a company deep dive to search for additional public postings from this company.")
+        elif deep_dive_entry.get("error"):
+            st.warning(f"Company deep dive could not be completed: {deep_dive_entry['error']}")
+        else:
+            deep_dive_df = pd.DataFrame(deep_dive_entry.get("records", []))
+            if deep_dive_df.empty:
+                st.write("No additional public postings were found beyond the ones already captured in this report.")
+            else:
+                direct_deep_dive_df = deep_dive_df[
+                    deep_dive_df["relevance_bucket"] == "Directly relevant"
+                ].reset_index(drop=True)
+                adjacent_deep_dive_df = deep_dive_df[
+                    deep_dive_df["relevance_bucket"] == "Adjacent"
+                ].reset_index(drop=True)
+                broader_deep_dive_df = deep_dive_df[
+                    deep_dive_df["relevance_bucket"] == "Broader company context"
+                ].reset_index(drop=True)
+
+                st.markdown("**Additional Directly Relevant Postings**")
+                if direct_deep_dive_df.empty:
+                    st.write("No additional directly relevant postings were found.")
+                else:
+                    for _, job_row in direct_deep_dive_df.iterrows():
+                        render_company_deep_dive_job_block(job_row)
+
+                st.markdown("**Additional Adjacent Postings**")
+                if adjacent_deep_dive_df.empty:
+                    st.write("No additional adjacent postings were found.")
+                else:
+                    for _, job_row in adjacent_deep_dive_df.iterrows():
+                        render_company_deep_dive_job_block(job_row)
+
+                st.markdown("**Broader Company Hiring Context**")
+                if broader_deep_dive_df.empty:
+                    st.write("No broader company-context postings were found.")
+                else:
+                    for _, job_row in broader_deep_dive_df.iterrows():
+                        render_company_deep_dive_job_block(job_row)
         st.markdown("</div>", unsafe_allow_html=True)
 
 
