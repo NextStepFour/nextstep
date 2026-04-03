@@ -173,6 +173,12 @@ def inject_global_styles():
             --brand-border: rgba(96, 165, 250, 0.35);
             --panel-border: rgba(255, 255, 255, 0.08);
         }
+        [data-testid="stHeader"] {
+            display: none;
+        }
+        [data-testid="stAppViewBlockContainer"] {
+            padding-top: 0 !important;
+        }
         .stApp h1, .stApp h2, .stApp h3 {
             color: #dbeafe;
         }
