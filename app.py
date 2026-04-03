@@ -502,32 +502,27 @@ def landing_marketing_mockup_html(kind="hero"):
         """
     return """
     <div class="landing-mockup-wrap landing-mockup-hero">
-        <div class="epic-scene epic-scene-hero">
-            <div class="epic-nebula nebula-a"></div>
-            <div class="epic-nebula nebula-b"></div>
-            <div class="epic-nebula nebula-c"></div>
-            <div class="epic-horizon"></div>
-            <div class="epic-citadel large"></div>
-            <div class="epic-signal-beam hero-beam"></div>
-            <div class="epic-grid-floor"></div>
-        </div>
-        <div class="epic-panel hero-core-panel">
-            <div class="epic-panel-kicker">NextStepSignal</div>
-            <div class="epic-panel-title">Market signals in one view</div>
-            <div class="epic-panel-copy">Find buyers. Rank targets. See service gaps.</div>
-            <div class="epic-mini-grid">
-                <div class="epic-mini-card"><span>Buyer companies</span><strong>58</strong></div>
-                <div class="epic-mini-card"><span>Top targets</span><strong>5</strong></div>
-                <div class="epic-mini-card"><span>Expansion gaps</span><strong>7</strong></div>
+        <div class="hero-clean-shell">
+            <div class="hero-clean-orbit orbit-a"></div>
+            <div class="hero-clean-orbit orbit-b"></div>
+            <div class="hero-clean-browser">
+                <div class="hero-clean-bar">
+                    <span class="hero-clean-dot"></span>
+                    <span class="hero-clean-dot"></span>
+                    <span class="hero-clean-dot"></span>
+                </div>
+                <div class="hero-clean-body">
+                    <div class="hero-clean-panel hero-clean-panel-large"></div>
+                    <div class="hero-clean-grid">
+                        <div class="hero-clean-card tall"></div>
+                        <div class="hero-clean-card"></div>
+                        <div class="hero-clean-card"></div>
+                        <div class="hero-clean-card wide"></div>
+                    </div>
+                </div>
             </div>
-        </div>
-        <div class="epic-panel side-panel top-right-panel">
-            <div class="epic-panel-kicker">Generate List</div>
-            <div class="epic-panel-title">Public demand signals</div>
-        </div>
-        <div class="epic-panel side-panel bottom-left-panel">
-            <div class="epic-panel-kicker">Next Steps</div>
-            <div class="epic-panel-title">Top companies ranked</div>
+            <div class="hero-clean-float float-top"></div>
+            <div class="hero-clean-float float-bottom"></div>
         </div>
     </div>
     """
@@ -3294,24 +3289,21 @@ def render_auth_account_panel():
 
 
 def render_landing_signup_capture():
-    st.markdown('<div class="landing-signup-shell">', unsafe_allow_html=True)
-    email_col, button_col = st.columns([1.75, 0.9], gap="small")
-    with email_col:
-        landing_email = st.text_input(
-            "Start free with your email",
-            placeholder="Enter your email address",
-            key="landing_capture_email",
-            label_visibility="collapsed",
-        )
-    with button_col:
-        st.markdown('<div class="landing-signup-button-pad"></div>', unsafe_allow_html=True)
-        start_free = st.button(
-            "Start Free",
-            key="landing_capture_submit",
-            type="primary",
-            use_container_width=True,
-        )
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.form("landing_capture_form", border=False):
+        email_col, button_col = st.columns([1.8, 0.95], gap="small")
+        with email_col:
+            landing_email = st.text_input(
+                "Start free with your email",
+                placeholder="Enter your email address",
+                key="landing_capture_email",
+                label_visibility="collapsed",
+            )
+        with button_col:
+            start_free = st.form_submit_button(
+                "Start Free",
+                type="primary",
+                use_container_width=True,
+            )
 
     if start_free:
         if not landing_email.strip():
@@ -3422,13 +3414,20 @@ def page_auth():
             }
         }
         .landing-wrap {
-            max-width: 1140px;
+            max-width: 1220px;
             margin: 0 auto;
+            padding: 0 1.2rem 2rem 1.2rem;
         }
-        .landing-hero-simple {
-            max-width: 760px;
-            padding: 3.2rem 0 2rem 0;
-            margin-bottom: 1.2rem;
+        .landing-hero {
+            display: grid;
+            grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
+            gap: 2.4rem;
+            align-items: center;
+            min-height: calc(100vh - 10rem);
+            padding: 3.4rem 0 2.2rem 0;
+        }
+        .landing-hero-copy {
+            max-width: 36rem;
         }
         .landing-band {
             border: 1px solid rgba(255,255,255,0.08);
@@ -3445,13 +3444,6 @@ def page_auth():
         .landing-band.clear {
             background: rgba(255,255,255,0.02);
         }
-        .landing-hero {
-            display: grid;
-            grid-template-columns: 1.05fr 1fr;
-            gap: 1.4rem;
-            align-items: center;
-            margin-bottom: 1.3rem;
-        }
         .landing-kicker {
             display: inline-block;
             margin-bottom: 0.85rem;
@@ -3464,25 +3456,20 @@ def page_auth():
             letter-spacing: 0.01em;
         }
         .landing-title {
-            font-size: clamp(2.7rem, 5vw, 4.5rem);
-            line-height: 0.98;
+            font-size: clamp(3.3rem, 6vw, 5.8rem);
+            line-height: 0.96;
             font-weight: 850;
             color: #eff6ff;
-            margin-bottom: 0.9rem;
-            max-width: 14ch;
+            margin-bottom: 1rem;
+            max-width: 8.5ch;
+            letter-spacing: -0.05em;
         }
         .landing-subtitle {
             color: #cbd5e1;
-            font-size: 1.02rem;
-            line-height: 1.6;
-            max-width: 45ch;
-            margin-bottom: 0.8rem;
-        }
-        .landing-support {
-            color: #93c5fd;
-            font-size: 0.92rem;
-            line-height: 1.45;
-            margin-bottom: 0.8rem;
+            font-size: 1.18rem;
+            line-height: 1.55;
+            max-width: 26ch;
+            margin-bottom: 1.35rem;
         }
         .landing-proof-grid,
         .landing-work-grid,
@@ -3520,35 +3507,29 @@ def page_auth():
             flex-wrap: wrap;
             margin-bottom: 0.8rem;
         }
-        .landing-signup-shell {
-            max-width: 720px;
-            margin-top: 0.55rem;
-            margin-bottom: 0.25rem;
-            padding: 0.3rem;
-            border-radius: 999px;
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,255,255,0.12);
+        .landing-hero-copy form {
+            max-width: 42rem;
         }
-        .landing-signup-button-pad {
-            height: 0.22rem;
-        }
-        .landing-signup-shell [data-testid="stTextInput"] > div > div {
+        .landing-hero-copy [data-testid="stTextInput"] > div > div {
             background: rgba(255,255,255,0.96);
-            border-radius: 999px;
+            border-radius: 999px !important;
+            min-height: 3.7rem;
+            border: 1px solid rgba(255,255,255,0.28);
         }
-        .landing-signup-shell input {
+        .landing-hero-copy input {
             color: #0f172a !important;
+            font-size: 1rem !important;
         }
-        .landing-signup-shell [data-testid="stButton"] button {
-            min-height: 3.4rem;
-            border-radius: 999px;
-            font-size: 1.02rem;
-            font-weight: 750;
+        .landing-hero-copy [data-testid="stFormSubmitButton"] button {
+            min-height: 3.7rem;
+            border-radius: 999px !important;
+            font-size: 1rem;
+            font-weight: 760;
+            border: 0 !important;
+            box-shadow: 0 12px 30px rgba(96, 165, 250, 0.22);
         }
         .landing-search-note {
-            color: #94a3b8;
-            font-size: 0.88rem;
-            margin-top: 0.55rem;
+            display: none;
         }
         .landing-anchor-button {
             display: inline-flex;
@@ -3627,9 +3608,121 @@ def page_auth():
         }
         .landing-mockup-wrap {
             position: relative;
-            min-height: 340px;
-            padding: 0.4rem 0.2rem 0.4rem;
+            min-height: 520px;
+            padding: 0;
             overflow: hidden;
+        }
+        .hero-clean-shell {
+            position: relative;
+            min-height: 520px;
+            border-radius: 2rem;
+            background:
+                radial-gradient(circle at 24% 18%, rgba(125, 211, 252, 0.28) 0%, rgba(125, 211, 252, 0.00) 34%),
+                radial-gradient(circle at 78% 22%, rgba(96, 165, 250, 0.24) 0%, rgba(96, 165, 250, 0.00) 30%),
+                linear-gradient(180deg, rgba(30, 41, 59, 0.10), rgba(15, 23, 42, 0.00)),
+                #0b1220;
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+            overflow: hidden;
+        }
+        .hero-clean-orbit {
+            position: absolute;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 999px;
+            pointer-events: none;
+        }
+        .hero-clean-orbit.orbit-a {
+            width: 86%;
+            height: 62%;
+            left: 6%;
+            top: 11%;
+        }
+        .hero-clean-orbit.orbit-b {
+            width: 66%;
+            height: 46%;
+            left: 19%;
+            bottom: 9%;
+        }
+        .hero-clean-browser {
+            position: absolute;
+            inset: 3.25rem 2.5rem 3.1rem 2.5rem;
+            border-radius: 1.7rem;
+            background: rgba(255,255,255,0.95);
+            box-shadow: 0 36px 90px rgba(2, 6, 23, 0.34);
+            overflow: hidden;
+        }
+        .hero-clean-bar {
+            height: 3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0 1rem;
+            background: rgba(248, 250, 252, 0.96);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+        }
+        .hero-clean-dot {
+            width: 0.55rem;
+            height: 0.55rem;
+            border-radius: 999px;
+            background: #d4dbe6;
+        }
+        .hero-clean-body {
+            position: relative;
+            height: calc(100% - 3rem);
+            padding: 1.3rem;
+            background:
+                linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+        }
+        .hero-clean-panel {
+            border-radius: 1.35rem;
+            background: linear-gradient(135deg, #1d4ed8 0%, #60a5fa 100%);
+            box-shadow: 0 20px 50px rgba(37, 99, 235, 0.24);
+        }
+        .hero-clean-panel-large {
+            height: 34%;
+            margin-bottom: 1rem;
+        }
+        .hero-clean-grid {
+            display: grid;
+            grid-template-columns: 1.05fr 1fr;
+            gap: 0.95rem;
+            height: calc(66% - 1rem);
+        }
+        .hero-clean-card {
+            border-radius: 1.15rem;
+            background: rgba(255,255,255,0.92);
+            border: 1px solid rgba(148, 163, 184, 0.20);
+            box-shadow: 0 16px 40px rgba(148, 163, 184, 0.16);
+        }
+        .hero-clean-card.tall {
+            grid-row: span 2;
+            background:
+                linear-gradient(180deg, rgba(96, 165, 250, 0.16), rgba(96, 165, 250, 0.04)),
+                rgba(255,255,255,0.94);
+        }
+        .hero-clean-card.wide {
+            background:
+                linear-gradient(135deg, rgba(29, 78, 216, 0.12), rgba(125, 211, 252, 0.04)),
+                rgba(255,255,255,0.95);
+        }
+        .hero-clean-float {
+            position: absolute;
+            width: 12rem;
+            height: 9rem;
+            border-radius: 1.3rem;
+            background: rgba(255,255,255,0.92);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            box-shadow: 0 22px 60px rgba(2, 6, 23, 0.18);
+        }
+        .hero-clean-float.float-top {
+            top: 6.5rem;
+            right: 0.6rem;
+        }
+        .hero-clean-float.float-bottom {
+            left: 0.8rem;
+            bottom: 1.2rem;
+            width: 10.5rem;
+            height: 7.6rem;
         }
         .epic-scene {
             position: absolute;
@@ -3978,6 +4071,9 @@ def page_auth():
         @media (max-width: 1100px) {
             .landing-hero {
                 grid-template-columns: 1fr;
+                min-height: auto;
+                gap: 1.5rem;
+                padding-top: 2.1rem;
             }
             .landing-proof-grid,
             .landing-work-grid,
@@ -3987,6 +4083,67 @@ def page_auth():
             }
             .landing-feature-layout {
                 grid-template-columns: 1fr;
+            }
+            .landing-title {
+                max-width: 9.5ch;
+            }
+            .landing-subtitle {
+                max-width: 34ch;
+            }
+            .landing-mockup-wrap,
+            .hero-clean-shell {
+                min-height: 420px;
+            }
+            .hero-clean-browser {
+                inset: 2rem 1.35rem 2.1rem 1.35rem;
+            }
+            .hero-clean-float.float-top {
+                right: 0.5rem;
+                width: 10rem;
+                height: 7.4rem;
+            }
+            .hero-clean-float.float-bottom {
+                width: 8.8rem;
+                height: 6.5rem;
+            }
+        }
+        @media (max-width: 760px) {
+            .landing-wrap {
+                padding: 0 0.8rem 2rem 0.8rem;
+            }
+            .landing-topbar {
+                padding: 0.72rem 0.8rem;
+                border-radius: 1.1rem;
+            }
+            .landing-brand {
+                font-size: 1.06rem;
+            }
+            .landing-topbar-cta {
+                min-width: 136px;
+                padding: 0.78rem 1rem;
+            }
+            .landing-title {
+                font-size: clamp(2.7rem, 14vw, 4.1rem);
+                max-width: 8.8ch;
+            }
+            .landing-subtitle {
+                font-size: 1.02rem;
+                max-width: 24ch;
+            }
+            .hero-clean-browser {
+                inset: 1.25rem 0.9rem 1.35rem 0.9rem;
+            }
+            .hero-clean-grid {
+                gap: 0.7rem;
+            }
+            .hero-clean-float.float-top {
+                top: 5.4rem;
+                width: 8rem;
+                height: 5.8rem;
+            }
+            .hero-clean-float.float-bottom {
+                width: 7rem;
+                height: 5rem;
             }
         }
         </style>
@@ -4038,105 +4195,24 @@ def page_auth():
             <div class="landing-topbar">
                 <div class="landing-brand">{APP_NAME}</div>
                 <div class="landing-nav-right">
-                    <a class="landing-nav-link" href="?auth=signin">Sign in</a>
                     <a class="landing-topbar-cta" href="?auth=signup">Start Free</a>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        st.markdown('<div class="landing-hero-simple">', unsafe_allow_html=True)
-        st.markdown('<div class="landing-title">Turn public market signals into your next opportunities</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="landing-subtitle">Find buyer demand. Rank opportunities. Spot service gaps.</div>',
-            unsafe_allow_html=True,
-        )
-        render_landing_signup_capture()
-        st.markdown('<div class="landing-search-note">Enter your email to start free.</div>', unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown(
-            """
-            <div class="landing-band soft">
-                <div class="landing-proof-grid">
-                    <div class="landing-card">
-                        <div class="landing-card-title">Find demand</div>
-                        <div class="landing-card-copy">See where buyer interest is showing up.</div>
-                    </div>
-                    <div class="landing-card">
-                        <div class="landing-card-title">Rank signals</div>
-                        <div class="landing-card-copy">Focus on the strongest companies first.</div>
-                    </div>
-                    <div class="landing-card">
-                        <div class="landing-card-title">Spot gaps</div>
-                        <div class="landing-card-copy">See what your service set may be missing.</div>
-                    </div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.markdown(
-            """
-            <div class="landing-band clear landing-section">
-                <div id="how-it-works"></div>
-                <div class="landing-section-title">How it works</div>
-                <div class="landing-section-copy">Add services. Generate signals. Review what matters.</div>
-                <div class="landing-work-grid">
-                    <div class="landing-card">
-                        <div class="landing-card-title">1. Add services</div>
-                        <div class="landing-card-copy">Save the work you want tracked.</div>
-                    </div>
-                    <div class="landing-card">
-                        <div class="landing-card-title">2. Generate lists</div>
-                        <div class="landing-card-copy">Find companies showing demand.</div>
-                    </div>
-                    <div class="landing-card">
-                        <div class="landing-card-title">3. Take action</div>
-                        <div class="landing-card-copy">Use Next Steps and Expansions.</div>
-                    </div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        render_landing_feature_band(
-            "Generate List",
-            "Build a buyer-company list from public market signals.",
-            ["matched services", "posting evidence", "exportable output"],
-            kind="list",
-            tone="deep",
-        )
-        render_landing_feature_band(
-            "Next Steps",
-            "See which companies deserve attention first.",
-            ["top companies", "hiring patterns", "deeper company view"],
-            kind="next",
-            tone="soft",
-        )
-        render_landing_feature_band(
-            "Potential Expansions",
-            "See which adjacent scopes keep showing up.",
-            ["service gaps", "interested companies", "pattern reporting"],
-            kind="expansion",
-            tone="clear",
-        )
-
-        st.markdown(
-            """
-            <div class="landing-band soft landing-section">
-                <div class="landing-section-title">What improves</div>
-                <div class="landing-outcome-grid">
-                    <div class="landing-card"><div class="landing-card-copy">Less manual searching.</div></div>
-                    <div class="landing-card"><div class="landing-card-copy">Clearer demand signals.</div></div>
-                    <div class="landing-card"><div class="landing-card-copy">More usable next steps.</div></div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        hero_left, hero_right = st.columns([0.94, 1.06], gap="large")
+        with hero_left:
+            st.markdown('<div class="landing-hero-copy">', unsafe_allow_html=True)
+            st.markdown('<div class="landing-title">Turn public market signals into your next opportunities</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="landing-subtitle">Find buyer demand. Rank opportunities. Spot service gaps.</div>',
+                unsafe_allow_html=True,
+            )
+            render_landing_signup_capture()
+            st.markdown("</div>", unsafe_allow_html=True)
+        with hero_right:
+            st.markdown(landing_marketing_mockup_html("hero"), unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
