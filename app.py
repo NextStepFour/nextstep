@@ -975,6 +975,32 @@ def save_service(name, description, location_filter, user_id=None):
         )
 
 
+def update_service_title(service_id, new_title, user_id=None):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user:
+        raise ValueError("Please sign in to update service profiles.")
+    with conn() as db:
+        db.execute(
+            """
+            UPDATE services
+            SET service_name = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (new_title.strip(), int(service_id), user["id"]),
+        )
+
+
+def delete_service(service_id, user_id=None):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user:
+        raise ValueError("Please sign in to delete service profiles.")
+    with conn() as db:
+        db.execute(
+            "DELETE FROM services WHERE id = ? AND user_id = ?",
+            (int(service_id), user["id"]),
+        )
+
+
 def save_run(
     run_name,
     services_text,
@@ -2738,8 +2764,152 @@ def page_services():
     if svc.empty:
         st.info("No service profiles saved yet.")
     else:
-        service_display = svc[["id", "service_name", "target_location", "created_at"]].copy()
-        st.dataframe(pretty_df(service_display), use_container_width=True)
+        st.markdown(
+            """
+            <style>
+            .service-map-wrap {
+                max-width: 1120px;
+                margin: 0 auto;
+            }
+            .service-map-intro {
+                color: #cbd5e1;
+                margin: 0.2rem 0 1rem 0;
+                line-height: 1.55;
+            }
+            .service-tile {
+                border: 1px solid var(--brand-border);
+                border-radius: 1rem;
+                padding: 1rem 1rem 0.95rem 1rem;
+                background: linear-gradient(180deg, rgba(96, 165, 250, 0.08), rgba(255,255,255,0.02));
+                box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+                min-height: 260px;
+            }
+            .service-tile-number {
+                display: inline-block;
+                font-size: 0.8rem;
+                font-weight: 800;
+                color: #0f172a;
+                background: var(--brand-blue);
+                border-radius: 999px;
+                padding: 0.22rem 0.55rem;
+                margin-bottom: 0.7rem;
+            }
+            .service-tile-title {
+                font-size: 1.12rem;
+                font-weight: 800;
+                color: #eff6ff;
+                margin-bottom: 0.55rem;
+                line-height: 1.3;
+            }
+            .service-tile-copy {
+                color: #dbeafe;
+                line-height: 1.55;
+                margin-bottom: 0.85rem;
+                min-height: 92px;
+            }
+            .service-tile-meta {
+                border-top: 1px solid rgba(255,255,255,0.08);
+                padding-top: 0.7rem;
+                margin-top: 0.2rem;
+            }
+            .service-tile-meta-label {
+                font-size: 0.73rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                color: #93c5fd;
+                margin-bottom: 0.18rem;
+            }
+            .service-tile-meta-value {
+                color: #cbd5e1;
+                line-height: 1.45;
+                margin-bottom: 0.55rem;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown('<div class="service-map-wrap">', unsafe_allow_html=True)
+        st.markdown("**Saved Service Map**")
+        st.markdown(
+            '<div class="service-map-intro">Services are shown in the order they were created so you can track your service library and its later variations over time.</div>',
+            unsafe_allow_html=True,
+        )
+
+        svc = svc.copy()
+        svc["_created_at_sort"] = pd.to_datetime(svc["created_at"], errors="coerce")
+        svc = svc.sort_values(["_created_at_sort", "id"], ascending=[True, True]).reset_index(drop=True)
+        svc["service_number"] = range(1, len(svc) + 1)
+
+        rename_id = st.session_state.get("service_rename_id")
+        delete_id = st.session_state.get("service_delete_id")
+        tile_columns = st.columns(3)
+
+        for idx, (_, row) in enumerate(svc.iterrows()):
+            service_id = int(row["id"])
+            service_number = int(row["service_number"])
+            description_preview = safe_text(row["service_description"])
+            if len(description_preview) > 220:
+                description_preview = description_preview[:217].rstrip() + "..."
+            created_text = format_short_date(row["created_at"]) or safe_text(row["created_at"], "")
+
+            with tile_columns[idx % 3]:
+                st.markdown(
+                    (
+                        '<div class="service-tile">'
+                        f'<div class="service-tile-number">#{service_number}</div>'
+                        f'<div class="service-tile-title">{escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
+                        f'<div class="service-tile-copy">{escape(description_preview or "No description available.")}</div>'
+                        '<div class="service-tile-meta">'
+                        '<div class="service-tile-meta-label">Target Location</div>'
+                        f'<div class="service-tile-meta-value">{escape(safe_text(row["target_location"], "Any U.S. location"))}</div>'
+                        '<div class="service-tile-meta-label">Created</div>'
+                        f'<div class="service-tile-meta-value">{escape(created_text or "Unknown")}</div>'
+                        '</div>'
+                        '</div>'
+                    ),
+                    unsafe_allow_html=True,
+                )
+
+                action_col1, action_col2 = st.columns(2)
+                if action_col1.button("Edit Title", key=f"edit_service_{service_id}", use_container_width=True):
+                    st.session_state["service_rename_id"] = service_id
+                    st.session_state.pop("service_delete_id", None)
+                    st.rerun()
+                if action_col2.button("Delete", key=f"delete_service_{service_id}", use_container_width=True):
+                    st.session_state["service_delete_id"] = service_id
+                    st.session_state.pop("service_rename_id", None)
+                    st.rerun()
+
+                if rename_id == service_id:
+                    with st.form(f"rename_service_form_{service_id}"):
+                        new_title = st.text_input("Service title", value=safe_text(row["service_name"]), key=f"rename_title_{service_id}")
+                        form_col1, form_col2 = st.columns(2)
+                        save_rename = form_col1.form_submit_button("Save")
+                        cancel_rename = form_col2.form_submit_button("Cancel")
+                    if save_rename:
+                        if not new_title.strip():
+                            st.error("Please enter a title.")
+                        else:
+                            update_service_title(service_id, new_title)
+                            st.session_state.pop("service_rename_id", None)
+                            st.success("Service title updated.")
+                            st.rerun()
+                    if cancel_rename:
+                        st.session_state.pop("service_rename_id", None)
+                        st.rerun()
+
+                if delete_id == service_id:
+                    st.warning("Delete this service profile?")
+                    confirm_col1, confirm_col2 = st.columns(2)
+                    if confirm_col1.button("Confirm Delete", key=f"confirm_delete_service_{service_id}", use_container_width=True):
+                        delete_service(service_id)
+                        st.session_state.pop("service_delete_id", None)
+                        st.success("Service profile deleted.")
+                        st.rerun()
+                    if confirm_col2.button("Cancel", key=f"cancel_delete_service_{service_id}", use_container_width=True):
+                        st.session_state.pop("service_delete_id", None)
+                        st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def page_generate():
