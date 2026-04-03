@@ -3324,6 +3324,9 @@ def render_landing_signup_capture():
 def page_auth():
     reset_token = st.query_params.get("reset_token")
     auth_view = safe_text(st.query_params.get("auth")).lower()
+    signup_email_prefill = safe_text(st.query_params.get("signup_email"))
+    if auth_view == "signup" and signup_email_prefill:
+        st.session_state["landing_signup_email"] = signup_email_prefill
     st.markdown(
         """
         <style>
@@ -3331,20 +3334,21 @@ def page_auth():
             padding-top: 0.35rem;
         }
         .landing-topbar {
-            position: sticky;
+            position: fixed;
             top: 0;
-            z-index: 50;
-            width: 100vw;
-            margin-left: calc(50% - 50vw);
-            margin-bottom: 0.35rem;
-            background: rgba(15, 23, 42, 0.96);
+            left: 0;
+            right: 0;
+            z-index: 90;
+            width: 100%;
+            background: rgba(15, 23, 42, 0.98);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
             backdrop-filter: blur(10px);
-            box-shadow: 0 1px 0 rgba(255,255,255,0.04);
         }
         .landing-topbar-inner {
-            max-width: 1220px;
+            max-width: 1280px;
             margin: 0 auto;
-            padding: 1rem 1.2rem;
+            min-height: 84px;
+            padding: 0 1.8rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -3354,7 +3358,7 @@ def page_auth():
             font-size: 1.32rem;
             font-weight: 850;
             color: #eff6ff;
-            letter-spacing: -0.01em;
+            letter-spacing: -0.02em;
         }
         .landing-nav-right {
             display: flex;
@@ -3370,8 +3374,9 @@ def page_auth():
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-width: 165px;
-            padding: 0.82rem 1.2rem;
+            min-width: 172px;
+            height: 54px;
+            padding: 0 1.35rem;
             border-radius: 999px;
             text-decoration: none !important;
             background: var(--brand-blue);
@@ -3427,28 +3432,25 @@ def page_auth():
             }
         }
         .landing-wrap {
-            max-width: 1220px;
+            max-width: none;
+            margin: 0;
+            padding: 0 0 2rem 0;
+        }
+        .landing-page {
+            max-width: 1280px;
             margin: 0 auto;
-            padding: 0 1.2rem 2rem 1.2rem;
+            padding: 128px 1.8rem 2.5rem 1.8rem;
         }
-        .landing-hero {
+        .landing-hero-shell {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
-            gap: 1.35rem;
+            grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+            gap: 3rem;
             align-items: start;
-            min-height: 560px;
-            padding: 1.8rem 0 1.6rem 0;
+            min-height: 640px;
         }
-        .landing-hero-frame {
-            min-height: 560px;
-        }
-        .landing-hero-copy {
-            max-width: 42rem;
-            min-height: 560px;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            padding: 0.4rem 0 0.35rem 0;
+        .landing-copy {
+            max-width: 40rem;
+            padding-top: 4.4rem;
         }
         .landing-band {
             border: 1px solid rgba(255,255,255,0.08);
@@ -3477,20 +3479,20 @@ def page_auth():
             letter-spacing: 0.01em;
         }
         .landing-title {
-            font-size: clamp(3.15rem, 4.8vw, 4.45rem);
-            line-height: 1.03;
+            font-size: clamp(3.2rem, 5vw, 4.7rem);
+            line-height: 1.02;
             font-weight: 560;
             color: #eff6ff;
             margin-bottom: 1.25rem;
-            max-width: 11.6ch;
+            max-width: 10.6ch;
             letter-spacing: -0.04em;
         }
         .landing-subtitle {
             color: #cbd5e1;
-            font-size: 1.4rem;
+            font-size: 1.46rem;
             line-height: 1.42;
-            max-width: 27ch;
-            margin-bottom: 1.7rem;
+            max-width: 26ch;
+            margin-bottom: 1.85rem;
             font-weight: 400;
         }
         .landing-proof-grid,
@@ -3529,29 +3531,48 @@ def page_auth():
             flex-wrap: wrap;
             margin-bottom: 0.8rem;
         }
-        .landing-hero-copy form {
-            max-width: 44rem;
+        .landing-signup-form {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            width: 100%;
+            max-width: 760px;
         }
-        .landing-hero-copy [data-testid="stTextInput"] > div > div {
-            background: rgba(255,255,255,0.96);
-            border-radius: 999px !important;
-            min-height: 3.7rem;
-            border: 1px solid rgba(255,255,255,0.28);
+        .landing-signup-input-wrap {
+            flex: 1 1 auto;
+            display: flex;
+            align-items: center;
+            min-height: 64px;
+            padding: 0 1.25rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.98);
+            border: 1px solid rgba(226, 232, 240, 0.84);
+            box-shadow: 0 16px 40px rgba(2, 6, 23, 0.12);
         }
-        .landing-hero-copy input {
-            color: #0f172a !important;
-            font-size: 1rem !important;
+        .landing-signup-input {
+            width: 100%;
+            border: 0;
+            background: transparent;
+            color: #0f172a;
+            font-size: 1rem;
+            outline: none;
         }
-        .landing-hero-copy [data-testid="stFormSubmitButton"] button {
-            min-height: 3.7rem;
-            border-radius: 999px !important;
+        .landing-signup-input::placeholder {
+            color: #64748b;
+        }
+        .landing-signup-button {
+            flex: 0 0 auto;
+            min-width: 190px;
+            height: 64px;
+            padding: 0 1.4rem;
+            border-radius: 999px;
+            border: 0;
+            background: var(--brand-blue);
+            color: #0f172a;
             font-size: 1rem;
             font-weight: 760;
-            border: 0 !important;
-            box-shadow: 0 12px 30px rgba(96, 165, 250, 0.22);
-        }
-        .landing-search-note {
-            display: none;
+            cursor: pointer;
+            box-shadow: 0 16px 36px rgba(96, 165, 250, 0.22);
         }
         .landing-anchor-button {
             display: inline-flex;
@@ -3630,21 +3651,22 @@ def page_auth():
         }
         .landing-mockup-wrap {
             position: relative;
-            min-height: 560px;
+            min-height: 620px;
             padding: 0;
             overflow: hidden;
             display: flex;
             align-items: flex-start;
         }
         .landing-hero-visual {
-            min-height: 560px;
+            min-height: 620px;
             display: flex;
             align-items: flex-start;
             justify-content: flex-start;
+            padding-top: 1.15rem;
         }
         .hero-clean-shell {
             position: relative;
-            min-height: 560px;
+            min-height: 620px;
             width: 100%;
             border-radius: 2rem;
             background:
@@ -4100,18 +4122,17 @@ def page_auth():
             font-weight: 650;
         }
         @media (max-width: 1100px) {
-            .landing-hero {
+            .landing-page {
+                padding-top: 108px;
+            }
+            .landing-hero-shell {
                 grid-template-columns: 1fr;
                 min-height: auto;
-                gap: 1.5rem;
-                padding-top: 1.4rem;
+                gap: 1.75rem;
             }
-            .landing-hero-frame {
-                min-height: auto;
-            }
-            .landing-hero-copy {
-                min-height: auto;
-                padding: 0;
+            .landing-copy {
+                max-width: 46rem;
+                padding-top: 0.25rem;
             }
             .landing-proof-grid,
             .landing-work-grid,
@@ -4123,10 +4144,10 @@ def page_auth():
                 grid-template-columns: 1fr;
             }
             .landing-title {
-                max-width: 11ch;
+                max-width: 11.2ch;
             }
             .landing-subtitle {
-                max-width: 28ch;
+                max-width: 29ch;
             }
             .landing-mockup-wrap,
             .hero-clean-shell,
@@ -4147,14 +4168,9 @@ def page_auth():
             }
         }
         @media (max-width: 760px) {
-            .landing-wrap {
-                padding: 0 0.8rem 2rem 0.8rem;
-            }
-            .landing-topbar {
-                margin-bottom: 0.15rem;
-            }
             .landing-topbar-inner {
-                padding: 0.82rem 0.8rem;
+                min-height: 74px;
+                padding: 0 0.95rem;
             }
             .landing-brand {
                 font-size: 1.16rem;
@@ -4163,13 +4179,25 @@ def page_auth():
                 min-width: 136px;
                 padding: 0.78rem 1rem;
             }
+            .landing-page {
+                padding: 98px 0.95rem 1.8rem 0.95rem;
+            }
             .landing-title {
-                font-size: clamp(2.8rem, 12vw, 4rem);
+                font-size: clamp(2.65rem, 12vw, 3.9rem);
                 max-width: 10.2ch;
             }
             .landing-subtitle {
-                font-size: 1.18rem;
+                font-size: 1.1rem;
                 max-width: 24ch;
+            }
+            .landing-signup-form {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.7rem;
+            }
+            .landing-signup-button {
+                width: 100%;
+                min-width: 0;
             }
             .hero-clean-browser {
                 inset: 1.25rem 0.9rem 1.35rem 0.9rem;
@@ -4244,22 +4272,35 @@ def page_auth():
             """,
             unsafe_allow_html=True,
         )
-        st.markdown('<div class="landing-hero-frame">', unsafe_allow_html=True)
-        hero_left, hero_right = st.columns([1.0, 1.02], gap="large")
-        with hero_left:
-            st.markdown('<div class="landing-hero-copy">', unsafe_allow_html=True)
-            st.markdown('<div class="landing-title">Turn public market signals into your next opportunities</div>', unsafe_allow_html=True)
-            st.markdown(
-                '<div class="landing-subtitle">Find buyer demand. Rank opportunities. Spot service gaps.</div>',
-                unsafe_allow_html=True,
-            )
-            render_landing_signup_capture()
-            st.markdown("</div>", unsafe_allow_html=True)
-        with hero_right:
-            st.markdown('<div class="landing-hero-visual">', unsafe_allow_html=True)
-            st.markdown(landing_marketing_mockup_html("hero"), unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <section class="landing-page">
+                <div class="landing-hero-shell">
+                    <div class="landing-copy">
+                        <div class="landing-title">Turn public market signals into your next opportunities</div>
+                        <div class="landing-subtitle">Find buyer demand. Rank opportunities. Spot service gaps.</div>
+                        <form class="landing-signup-form" method="get">
+                            <input type="hidden" name="auth" value="signup" />
+                            <div class="landing-signup-input-wrap">
+                                <input
+                                    class="landing-signup-input"
+                                    type="email"
+                                    name="signup_email"
+                                    placeholder="Enter your email address"
+                                    aria-label="Enter your email address"
+                                />
+                            </div>
+                            <button class="landing-signup-button" type="submit">Start Free</button>
+                        </form>
+                    </div>
+                    <div class="landing-hero-visual">
+                        {landing_marketing_mockup_html("hero")}
+                    </div>
+                </div>
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
 
     st.markdown("</div>", unsafe_allow_html=True)
 
