@@ -2907,12 +2907,6 @@ def page_next_steps():
     top_company_count = min(5, len(company_priority_df))
     top_companies_df = company_priority_df.head(top_company_count).copy()
 
-    stat1, stat2, stat3, stat4 = st.columns(4)
-    stat1.metric("Companies Reviewed", len(company_priority_df))
-    stat2.metric("Top Companies Highlighted", top_company_count)
-    stat3.metric("Multiple Posting Signals", int((company_priority_df["relevant_posting_count"] >= 2).sum()))
-    stat4.metric("Salary Disclosed", int((company_priority_df["salary_signal"] != "Not disclosed").sum()))
-
     st.download_button(
         "Download top next steps as CSV",
         data=csv_data(
