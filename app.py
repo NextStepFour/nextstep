@@ -3257,6 +3257,37 @@ def page_auth():
             margin-top: 1rem;
             margin-bottom: 1rem;
         }
+        .landing-anchor-row {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.8rem;
+        }
+        .landing-anchor-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 220px;
+            padding: 0.95rem 1.25rem;
+            border-radius: 0.95rem;
+            text-decoration: none !important;
+            font-weight: 700;
+            font-size: 1rem;
+            transition: all 0.15s ease;
+        }
+        .landing-anchor-button.primary {
+            background: var(--brand-blue);
+            color: #0f172a !important;
+            border: 1px solid var(--brand-blue);
+        }
+        .landing-anchor-button.secondary {
+            background: transparent;
+            color: #dbeafe !important;
+            border: 1px solid var(--brand-border);
+        }
+        .landing-anchor-button:hover {
+            transform: translateY(-1px);
+        }
         .landing-section-title {
             font-size: 1.65rem;
             font-weight: 850;
@@ -3347,14 +3378,18 @@ def page_auth():
                 unsafe_allow_html=True,
             )
             st.markdown(
-                '<div class="landing-support">Built for service providers in solar, energy storage, EV charging, QA/QC, field services, and engineering support.</div>',
+                '<div class="landing-support">Built for service providers that want a clearer, more usable view of market demand and next-step opportunities.</div>',
                 unsafe_allow_html=True,
             )
-            cta1, cta2 = st.columns([1, 1])
-            if cta1.button("Start Free", type="primary", use_container_width=True):
-                st.session_state["landing_auth_mode"] = "Create Account"
-            if cta2.button("See How It Works", use_container_width=True):
-                st.session_state["landing_auth_mode"] = "Sign In"
+            st.markdown(
+                """
+                <div class="landing-anchor-row">
+                    <a class="landing-anchor-button primary" href="#auth-panel">Start Free</a>
+                    <a class="landing-anchor-button secondary" href="#how-it-works">See How It Works</a>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         with hero_right:
             st.markdown(auth_space_scene_html(), unsafe_allow_html=True)
 
@@ -3381,6 +3416,7 @@ def page_auth():
         st.markdown(
             """
             <div class="landing-section">
+                <div id="how-it-works"></div>
                 <div class="landing-section-title">A simpler way to read the market</div>
                 <div class="landing-section-copy">Move from scattered public postings and weak manual research to a clearer, service-driven market view.</div>
                 <div class="landing-work-grid">
