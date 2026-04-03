@@ -3279,6 +3279,21 @@ def page_auth():
             max-width: 1140px;
             margin: 0 auto;
         }
+        .landing-band {
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 1.2rem;
+            padding: 1.2rem 1.15rem;
+            margin-bottom: 1rem;
+        }
+        .landing-band.soft {
+            background: rgba(96, 165, 250, 0.08);
+        }
+        .landing-band.deep {
+            background: rgba(15, 23, 42, 0.42);
+        }
+        .landing-band.clear {
+            background: rgba(255,255,255,0.02);
+        }
         .landing-hero {
             display: grid;
             grid-template-columns: 1.05fr 1fr;
@@ -3307,16 +3322,16 @@ def page_auth():
         }
         .landing-subtitle {
             color: #cbd5e1;
-            font-size: 1.08rem;
-            line-height: 1.7;
-            max-width: 58ch;
-            margin-bottom: 1rem;
+            font-size: 1.02rem;
+            line-height: 1.6;
+            max-width: 45ch;
+            margin-bottom: 0.8rem;
         }
         .landing-support {
             color: #93c5fd;
-            font-size: 0.95rem;
-            line-height: 1.55;
-            margin-bottom: 1rem;
+            font-size: 0.92rem;
+            line-height: 1.45;
+            margin-bottom: 0.8rem;
         }
         .landing-proof-grid,
         .landing-work-grid,
@@ -3388,16 +3403,16 @@ def page_auth():
             transform: translateY(-1px);
         }
         .landing-section-title {
-            font-size: 1.65rem;
+            font-size: 1.5rem;
             font-weight: 850;
             color: #eff6ff;
             margin-bottom: 0.25rem;
         }
         .landing-section-copy {
             color: #cbd5e1;
-            line-height: 1.65;
-            margin-bottom: 0.9rem;
-            max-width: 70ch;
+            line-height: 1.55;
+            margin-bottom: 0.75rem;
+            max-width: 58ch;
         }
         .landing-product {
             border: 1px solid var(--brand-border);
@@ -3529,11 +3544,11 @@ def page_auth():
             st.markdown('<div class="landing-kicker">Market intelligence for service growth</div>', unsafe_allow_html=True)
             st.markdown('<div class="landing-title">Turn public market signals into your next client opportunities</div>', unsafe_allow_html=True)
             st.markdown(
-                '<div class="landing-subtitle">NextStepSignal helps service companies find buyer demand, organize hiring signals, and identify where to focus next.</div>',
+                '<div class="landing-subtitle">Find buyer demand. Rank opportunities. Spot service gaps.</div>',
                 unsafe_allow_html=True,
             )
             st.markdown(
-                '<div class="landing-support">Built for service providers that want a clearer, more usable view of market demand and next-step opportunities.</div>',
+                '<div class="landing-support">A cleaner way to turn public signals into action.</div>',
                 unsafe_allow_html=True,
             )
             render_landing_signup_capture()
@@ -3550,18 +3565,20 @@ def page_auth():
 
         st.markdown(
             """
-            <div class="landing-proof-grid">
-                <div class="landing-card">
-                    <div class="landing-card-title">Find buyer companies</div>
-                    <div class="landing-card-copy">Capture public hiring and market signals tied to your service scope.</div>
-                </div>
-                <div class="landing-card">
-                    <div class="landing-card-title">Prioritize what matters</div>
-                    <div class="landing-card-copy">See which companies show the strongest and most repeated demand signals.</div>
-                </div>
-                <div class="landing-card">
-                    <div class="landing-card-title">Spot service gaps</div>
-                    <div class="landing-card-copy">Identify adjacent scopes the market is already asking for but your current offering may miss.</div>
+            <div class="landing-band soft">
+                <div class="landing-proof-grid">
+                    <div class="landing-card">
+                        <div class="landing-card-title">Find demand</div>
+                        <div class="landing-card-copy">See where buyer interest is showing up.</div>
+                    </div>
+                    <div class="landing-card">
+                        <div class="landing-card-title">Rank signals</div>
+                        <div class="landing-card-copy">Focus on the strongest companies first.</div>
+                    </div>
+                    <div class="landing-card">
+                        <div class="landing-card-title">Spot gaps</div>
+                        <div class="landing-card-copy">See what your service set may be missing.</div>
+                    </div>
                 </div>
             </div>
             """,
@@ -3570,22 +3587,22 @@ def page_auth():
 
         st.markdown(
             """
-            <div class="landing-section">
+            <div class="landing-band clear landing-section">
                 <div id="how-it-works"></div>
-                <div class="landing-section-title">A simpler way to read the market</div>
-                <div class="landing-section-copy">Move from scattered public postings and weak manual research to a clearer, service-driven market view.</div>
+                <div class="landing-section-title">How it works</div>
+                <div class="landing-section-copy">Add services. Generate signals. Review what matters.</div>
                 <div class="landing-work-grid">
                     <div class="landing-card">
-                        <div class="landing-card-title">1. Add your service profiles</div>
-                        <div class="landing-card-copy">Organize your services by category and define the exact scope you want tracked.</div>
+                        <div class="landing-card-title">1. Add services</div>
+                        <div class="landing-card-copy">Save the work you want tracked.</div>
                     </div>
                     <div class="landing-card">
-                        <div class="landing-card-title">2. Generate buyer-company lists</div>
-                        <div class="landing-card-copy">Find companies with public hiring signals related to your service scope.</div>
+                        <div class="landing-card-title">2. Generate lists</div>
+                        <div class="landing-card-copy">Find companies showing demand.</div>
                     </div>
                     <div class="landing-card">
-                        <div class="landing-card-title">3. Act on the strongest signals</div>
-                        <div class="landing-card-copy">Use Next Steps and Potential Expansions to prioritize outreach and identify adjacent service opportunities.</div>
+                        <div class="landing-card-title">3. Take action</div>
+                        <div class="landing-card-copy">Use Next Steps and Expansions.</div>
                     </div>
                 </div>
             </div>
@@ -3595,20 +3612,20 @@ def page_auth():
 
         st.markdown(
             """
-            <div class="landing-product">
+            <div class="landing-band deep landing-product">
                 <div class="landing-product-title">Generate List</div>
-                <div class="landing-product-copy">Build a buyer-company list from public job postings and related market signals. Each result is tied back to your saved service scope so the output stays relevant.</div>
-                <div class="landing-product-bullets">• Buyer company list with matched services<br>• Public posting evidence and salary when disclosed<br>• Clean CSV and PDF export</div>
+                <div class="landing-product-copy">Build a buyer-company list from public market signals.</div>
+                <div class="landing-product-bullets">• matched services<br>• posting evidence<br>• exportable output</div>
             </div>
-            <div class="landing-product">
+            <div class="landing-band soft landing-product">
                 <div class="landing-product-title">Next Steps</div>
-                <div class="landing-product-copy">Rank the strongest companies based on repeated hiring signals, recency, and supporting evidence. Review the top companies in a clean, readable format designed for action.</div>
-                <div class="landing-product-bullets">• Top 1 to 5 companies highlighted<br>• Company-specific job patterns<br>• Expanded search for deeper company context</div>
+                <div class="landing-product-copy">See which companies deserve attention first.</div>
+                <div class="landing-product-bullets">• top companies<br>• hiring patterns<br>• deeper company view</div>
             </div>
-            <div class="landing-product">
+            <div class="landing-band clear landing-product">
                 <div class="landing-product-title">Potential Expansions</div>
-                <div class="landing-product-copy">See where the market is requesting work adjacent to your current services. Use repeated public signals to identify missing scopes worth evaluating.</div>
-                <div class="landing-product-bullets">• Service-gap analysis from saved evidence<br>• Companies showing interest in adjacent scopes<br>• Pattern-by-company expansion reporting</div>
+                <div class="landing-product-copy">See which adjacent scopes keep showing up.</div>
+                <div class="landing-product-bullets">• service gaps<br>• interested companies<br>• pattern reporting</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -3616,12 +3633,12 @@ def page_auth():
 
         st.markdown(
             """
-            <div class="landing-section">
-                <div class="landing-section-title">What changes when your market view is structured</div>
+            <div class="landing-band soft landing-section">
+                <div class="landing-section-title">What improves</div>
                 <div class="landing-outcome-grid">
-                    <div class="landing-card"><div class="landing-card-copy">Less manual searching across scattered public sources.</div></div>
-                    <div class="landing-card"><div class="landing-card-copy">A clearer view of which companies are showing demand.</div></div>
-                    <div class="landing-card"><div class="landing-card-copy">Better prioritization for outreach and business development.</div></div>
+                    <div class="landing-card"><div class="landing-card-copy">Less manual searching.</div></div>
+                    <div class="landing-card"><div class="landing-card-copy">Clearer demand signals.</div></div>
+                    <div class="landing-card"><div class="landing-card-copy">More usable next steps.</div></div>
                 </div>
             </div>
             """,
