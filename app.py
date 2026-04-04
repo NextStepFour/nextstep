@@ -422,85 +422,85 @@ def inject_app_chrome_styles():
             top: 1rem;
         }
         .app-nav-brand {
-            font-size: 2rem;
+            font-size: 1.8rem;
             font-weight: 850;
             color: #f8fbff;
             letter-spacing: -0.03em;
-            margin-bottom: 0.85rem;
+            margin-bottom: 1.1rem;
         }
-        .app-nav-card {
-            background: #f8fbff;
-            border: 1px solid rgba(148, 163, 184, 0.18);
-            border-radius: 1rem;
-            padding: 1rem 0.95rem;
-            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
-            margin-bottom: 1rem;
+        .app-nav-account {
+            margin-bottom: 1.2rem;
         }
         .app-nav-user-name {
-            font-size: 1rem;
+            font-size: 0.98rem;
             font-weight: 700;
-            color: #111827;
+            color: #eff6ff;
             margin-bottom: 0.2rem;
         }
         .app-nav-user-email {
-            font-size: 0.9rem;
-            color: #475569;
-            margin-bottom: 0.8rem;
+            font-size: 0.86rem;
+            color: #94a3b8;
+            margin-bottom: 0.7rem;
             word-break: break-word;
         }
-        .app-nav-mini-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 0.45rem;
+        .app-nav-meta-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.28rem;
         }
-        .app-nav-mini-item {
-            background: #f8fbff;
-            border: 1px solid rgba(148, 163, 184, 0.14);
-            border-radius: 0.75rem;
-            padding: 0.45rem 0.4rem;
-            text-align: center;
+        .app-nav-meta-row {
+            display: flex;
+            align-items: baseline;
+            gap: 0.4rem;
+            color: #cbd5e1;
+            font-size: 0.82rem;
         }
-        .app-nav-mini-label {
+        .app-nav-meta-label {
             font-size: 0.68rem;
             font-weight: 700;
             color: #64748b;
             text-transform: uppercase;
-            margin-bottom: 0.18rem;
+            min-width: 3.5rem;
         }
-        .app-nav-mini-value {
-            font-size: 0.88rem;
+        .app-nav-meta-value {
+            font-size: 0.84rem;
             font-weight: 700;
-            color: #111827;
+            color: #eff6ff;
             line-height: 1.15;
+        }
+        .app-nav-divider {
+            height: 1px;
+            background: rgba(148, 163, 184, 0.16);
+            margin: 1rem 0 1rem 0;
         }
         .app-nav-links {
             display: flex;
             flex-direction: column;
-            gap: 0.48rem;
-            margin-bottom: 1rem;
+            gap: 0.18rem;
+            margin-bottom: 1.2rem;
         }
         .app-nav-link-btn {
             width: 100%;
-            min-height: 2.95rem;
-            border-radius: 0.9rem;
-            padding: 0.7rem 0.85rem;
+            min-height: 2.7rem;
+            border-radius: 0.85rem;
+            padding: 0.62rem 0.82rem;
             font-size: 0.98rem;
             font-weight: 600;
             line-height: 1.2;
             margin: 0;
             text-align: left;
             cursor: pointer;
+            transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
         }
         .app-nav-link-btn {
-            background: #ffffff;
-            color: #0f172a;
-            border: 1px solid rgba(148, 163, 184, 0.18);
-            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+            background: transparent;
+            color: #cbd5e1;
+            border: 1px solid transparent;
+            box-shadow: none;
         }
         .app-nav-link-btn:hover {
             background: rgba(96, 165, 250, 0.1);
-            border-color: rgba(96, 165, 250, 0.35);
-            color: #0f172a;
+            color: #eff6ff;
         }
         .app-nav-link-btn.active {
             background: #4f7cf0;
@@ -510,21 +510,20 @@ def inject_app_chrome_styles():
         }
         .app-nav-signout-btn {
             width: 100%;
-            min-height: 2.95rem;
+            min-height: 2.7rem;
             border-radius: 0.85rem;
-            padding: 0.8rem 0.95rem;
+            padding: 0.62rem 0.82rem;
             background: transparent;
-            color: #dbeafe;
-            border: 1px solid rgba(96, 165, 250, 0.35);
+            color: #94a3b8;
+            border: 1px solid transparent;
             box-shadow: none;
             cursor: pointer;
-            text-align: center;
+            text-align: left;
             font-size: 0.98rem;
-            font-weight: 650;
+            font-weight: 600;
         }
         .app-nav-signout-btn:hover {
             background: rgba(96, 165, 250, 0.14);
-            border-color: #60a5fa;
             color: #eff6ff;
         }
         @media (max-width: 960px) {
@@ -2781,16 +2780,18 @@ def render_app_nav_rail(user, current_page, nav_options):
         (
             '<div class="app-nav-rail">'
             f'<div class="app-nav-brand">{APP_NAME}</div>'
-            '<div class="app-nav-card">'
+            '<div class="app-nav-account">'
             f'<div class="app-nav-user-name">{escape(user["full_name"])}</div>'
             f'<div class="app-nav-user-email">{escape(user["email"])}</div>'
-            '<div class="app-nav-mini-grid">'
-            f'<div class="app-nav-mini-item"><div class="app-nav-mini-label">Credits</div><div class="app-nav-mini-value">{credits(user["id"])}</div></div>'
-            f'<div class="app-nav-mini-item"><div class="app-nav-mini-label">Plan</div><div class="app-nav-mini-value">{escape(user.get("plan_name") or "None")}</div></div>'
-            f'<div class="app-nav-mini-item"><div class="app-nav-mini-label">Status</div><div class="app-nav-mini-value">{escape(user.get("subscription_status", "inactive").title())}</div></div>'
+            '<div class="app-nav-meta-list">'
+            f'<div class="app-nav-meta-row"><div class="app-nav-meta-label">Credits</div><div class="app-nav-meta-value">{credits(user["id"])}</div></div>'
+            f'<div class="app-nav-meta-row"><div class="app-nav-meta-label">Plan</div><div class="app-nav-meta-value">{escape(user.get("plan_name") or "None")}</div></div>'
+            f'<div class="app-nav-meta-row"><div class="app-nav-meta-label">Status</div><div class="app-nav-meta-value">{escape(user.get("subscription_status", "inactive").title())}</div></div>'
             "</div>"
             "</div>"
+            '<div class="app-nav-divider"></div>'
             f'<div class="app-nav-links">{nav_buttons_html}</div>'
+            '<div class="app-nav-divider"></div>'
             '<button type="button" class="app-nav-signout-btn" onclick="window.parent.location.search=\'?action=signout\'">Sign Out</button>'
             "</div>"
         ),
