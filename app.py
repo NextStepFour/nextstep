@@ -414,12 +414,13 @@ def inject_app_chrome_styles():
             max-width: 100% !important;
         }
         .app-shell {
-            max-width: 1480px;
+            max-width: 1560px;
             margin: 0 auto;
         }
         .app-nav-rail {
             position: sticky;
             top: 1rem;
+            max-width: 238px;
         }
         .app-nav-brand {
             font-size: 1.8rem;
@@ -6517,7 +6518,7 @@ else:
         nav_options.append("Users")
     page = resolve_app_page(nav_options)
 
-    nav_col, main_col = st.columns([1.1, 4.2], gap="large")
+    nav_col, main_col = st.columns([0.88, 5.12], gap="medium")
     with nav_col:
         render_app_nav_rail(user, page, nav_options)
 
