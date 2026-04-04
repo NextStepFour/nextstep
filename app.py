@@ -31,6 +31,8 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 APP_NAME = "NextStepSignal"
 APP_TAGLINE = "Market intelligence for operational expansion and opportunity discovery"
 DEFAULT_SERVICE_CATEGORY = "Generic"
+SERVICE_CATEGORY_DEFAULT_OPTION = f"Use default ({DEFAULT_SERVICE_CATEGORY})"
+SERVICE_CATEGORY_ADD_OPTION = "+ Add new category"
 DB_PATH = os.getenv("NEXTSTEP_DB_PATH", "nextstep_portal.db")
 DEFAULT_CREDITS = 50
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "rgordon@heliovolta.com").strip().lower()
@@ -2325,6 +2327,29 @@ def prepare_service_map_df(svc_df):
     ).reset_index(drop=True)
     working["service_number"] = working.groupby("service_category").cumcount() + 1
     return working
+
+
+def ordered_service_categories(svc_df):
+    if svc_df is None or svc_df.empty:
+        return [DEFAULT_SERVICE_CATEGORY]
+    working = prepare_service_map_df(svc_df)
+    categories = []
+    for category_name in working["service_category"].tolist():
+        cleaned_category = safe_text(category_name, DEFAULT_SERVICE_CATEGORY).strip() or DEFAULT_SERVICE_CATEGORY
+        if cleaned_category not in categories:
+            categories.append(cleaned_category)
+    if DEFAULT_SERVICE_CATEGORY not in categories:
+        categories.insert(0, DEFAULT_SERVICE_CATEGORY)
+    return categories
+
+
+def service_category_picker_options(svc_df, current_value=""):
+    categories = ordered_service_categories(svc_df)
+    cleaned_current = safe_text(current_value).strip()
+    if cleaned_current and cleaned_current != DEFAULT_SERVICE_CATEGORY and cleaned_current not in categories:
+        categories.append(cleaned_current)
+    non_default_categories = [category for category in categories if category != DEFAULT_SERVICE_CATEGORY]
+    return [SERVICE_CATEGORY_ADD_OPTION, SERVICE_CATEGORY_DEFAULT_OPTION] + non_default_categories
 
 
 def save_run(
@@ -5857,6 +5882,8 @@ def page_services():
         st.rerun()
     if st.session_state.pop("_reset_service_form", False):
         st.session_state["service_category_input"] = ""
+        st.session_state["service_category_select"] = SERVICE_CATEGORY_DEFAULT_OPTION
+        st.session_state["service_category_new"] = ""
         st.session_state["service_name_input"] = ""
         st.session_state["service_description_input"] = ""
         st.session_state["service_location_input"] = "Any U.S. location"
@@ -5864,7 +5891,45 @@ def page_services():
     if pending_enhanced_description is not None:
         st.session_state["service_description_input"] = pending_enhanced_description
 
-    category = st.text_input("Service Category", placeholder="Education, Healthcare, Landscaping", key="service_category_input")
+    ensure_service_orders()
+    svc = services_df()
+    current_category_value = safe_text(st.session_state.get("service_category_input")).strip()
+    category_options = service_category_picker_options(svc, current_category_value)
+    current_category_select = safe_text(st.session_state.get("service_category_select")).strip()
+    if current_category_select not in category_options:
+        if current_category_value and current_category_value in category_options:
+            st.session_state["service_category_select"] = current_category_value
+        elif current_category_value and current_category_value != DEFAULT_SERVICE_CATEGORY:
+            st.session_state["service_category_select"] = SERVICE_CATEGORY_ADD_OPTION
+            st.session_state["service_category_new"] = current_category_value
+        else:
+            st.session_state["service_category_select"] = SERVICE_CATEGORY_DEFAULT_OPTION
+
+    selected_category_option = st.selectbox("Service Category", category_options, key="service_category_select")
+    if selected_category_option == SERVICE_CATEGORY_ADD_OPTION:
+        add_category_col, add_category_button_col = st.columns([5, 1.2])
+        add_category_col.text_input(
+            "New category",
+            placeholder="Education, Healthcare, Landscaping",
+            key="service_category_new",
+            label_visibility="collapsed",
+        )
+        if add_category_button_col.button("Add", use_container_width=True):
+            new_category_name = safe_text(st.session_state.get("service_category_new")).strip()
+            if not new_category_name:
+                st.error("Enter a category name to add.")
+            else:
+                st.session_state["service_category_input"] = new_category_name
+                st.session_state["service_category_select"] = new_category_name
+                st.session_state["service_category_new"] = ""
+                st.rerun()
+        category = safe_text(st.session_state.get("service_category_new")).strip()
+    elif selected_category_option == SERVICE_CATEGORY_DEFAULT_OPTION:
+        category = ""
+    else:
+        category = selected_category_option
+    st.session_state["service_category_input"] = category
+
     name = st.text_input("Service", key="service_name_input")
     description = st.text_area(
         "Service description",
@@ -5890,8 +5955,6 @@ def page_services():
             st.session_state["_reset_service_form"] = True
             st.success(f"Service profile saved under {safe_text(category.strip(), DEFAULT_SERVICE_CATEGORY) or DEFAULT_SERVICE_CATEGORY}.")
             st.rerun()
-    ensure_service_orders()
-    svc = services_df()
     if svc.empty:
         st.info("No service profiles saved yet.")
     else:
@@ -6150,11 +6213,25 @@ def page_services():
 
                     if rename_id == service_id:
                         with st.form(f"rename_service_form_{service_id}"):
-                            new_category = st.text_input(
+                            current_row_category = safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY).strip() or DEFAULT_SERVICE_CATEGORY
+                            rename_category_options = [SERVICE_CATEGORY_ADD_OPTION] + ordered_service_categories(svc)
+                            if current_row_category not in rename_category_options:
+                                rename_category_options.append(current_row_category)
+                            default_category_index = rename_category_options.index(current_row_category)
+                            selected_rename_category = st.selectbox(
                                 "Service Category",
-                                value=safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY),
-                                key=f"rename_category_{service_id}",
+                                options=rename_category_options,
+                                index=default_category_index,
+                                key=f"rename_category_select_{service_id}",
                             )
+                            rename_new_category = ""
+                            if selected_rename_category == SERVICE_CATEGORY_ADD_OPTION:
+                                rename_new_category = st.text_input(
+                                    "New category",
+                                    placeholder="Education, Healthcare, Landscaping",
+                                    key=f"rename_category_new_{service_id}",
+                                )
+                            new_category = rename_new_category.strip() if selected_rename_category == SERVICE_CATEGORY_ADD_OPTION else selected_rename_category
                             new_title = st.text_input(
                                 "Service",
                                 value=safe_text(row["service_name"]),
@@ -6175,7 +6252,9 @@ def page_services():
                             save_rename = form_col1.form_submit_button("Save", type="primary", use_container_width=True)
                             cancel_rename = form_col2.form_submit_button("Cancel", type="primary", use_container_width=True)
                         if save_rename:
-                            if not new_title.strip() or not new_description.strip():
+                            if selected_rename_category == SERVICE_CATEGORY_ADD_OPTION and not new_category.strip():
+                                st.error("Enter a category name or choose an existing category.")
+                            elif not new_title.strip() or not new_description.strip():
                                 st.error("Please enter a service and service description.")
                             else:
                                 update_service_profile(
