@@ -2239,6 +2239,10 @@ def split_service_values(value):
     return [item.strip() for item in items if item.strip()]
 
 
+def queue_navigation(target_page):
+    st.session_state["_pending_nav_page"] = target_page
+
+
 def ensure_company_columns(company_df):
     working = company_df.copy()
     for column in COMPANY_COLUMNS:
@@ -4680,13 +4684,13 @@ def page_dashboard():
     )
     a1, a2, a3 = st.columns(3)
     if a1.button("Generate New List", type="primary", use_container_width=True):
-        st.session_state["nav_page"] = "Generate List"
+        queue_navigation("Generate List")
         st.rerun()
     if a2.button("Review Next Steps", type="primary", use_container_width=True):
-        st.session_state["nav_page"] = "Next Steps"
+        queue_navigation("Next Steps")
         st.rerun()
     if a3.button("Review Potential Expansions", type="primary", use_container_width=True):
-        st.session_state["nav_page"] = "Potential Expansions"
+        queue_navigation("Potential Expansions")
         st.rerun()
 
     if is_admin_user(user):
@@ -5830,6 +5834,9 @@ else:
         ]
         if is_admin_user(user):
             nav_options.append("Users")
+        pending_nav_page = st.session_state.pop("_pending_nav_page", None)
+        if pending_nav_page in nav_options:
+            st.session_state["nav_page"] = pending_nav_page
         if st.session_state.get("nav_page") not in nav_options:
             st.session_state["nav_page"] = "Dashboard"
         page = st.radio(
