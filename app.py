@@ -2472,44 +2472,6 @@ def queue_navigation(target_page):
     st.session_state["_pending_nav_page"] = target_page
 
 
-def render_page_picker(current_page, nav_options):
-    st.markdown(
-        """
-        <style>
-        .page-picker-shell {
-            max-width: 360px;
-            margin: 0 0 1rem 0;
-        }
-        .page-picker-label {
-            color: #94a3b8;
-            font-size: 0.82rem;
-            font-weight: 700;
-            letter-spacing: 0.01em;
-            margin-bottom: 0.28rem;
-            text-transform: uppercase;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown('<div class="page-picker-shell"><div class="page-picker-label">Page</div></div>', unsafe_allow_html=True)
-    if current_page not in nav_options:
-        current_page = nav_options[0]
-    if st.session_state.get("_top_nav_synced_page") != current_page:
-        st.session_state["top_nav_page"] = current_page
-        st.session_state["_top_nav_synced_page"] = current_page
-    selected_page = st.selectbox(
-        "Page",
-        nav_options,
-        index=nav_options.index(current_page),
-        key="top_nav_page",
-        label_visibility="collapsed",
-    )
-    if selected_page != current_page:
-        queue_navigation(selected_page)
-        st.rerun()
-
-
 def ensure_company_columns(company_df):
     working = company_df.copy()
     for column in COMPANY_COLUMNS:
@@ -6212,11 +6174,7 @@ else:
         if st.button("Sign Out", type="secondary"):
             set_current_user(None)
             st.session_state.pop("nav_page", None)
-            st.session_state.pop("top_nav_page", None)
-            st.session_state.pop("_top_nav_synced_page", None)
             st.rerun()
-
-    render_page_picker(page, nav_options)
 
     if page == "Plans & Billing":
         page_billing(user)
