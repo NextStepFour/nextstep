@@ -21,7 +21,6 @@ from xml.sax.saxutils import escape
 import pandas as pd
 import stripe
 import streamlit as st
-import streamlit.components.v1 as components
 from openai import OpenAI
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
@@ -396,85 +395,143 @@ def inject_app_chrome_styles():
         """
         <style>
         [data-testid="stHeader"] {
-            display: block !important;
-            visibility: visible !important;
-            background: rgba(15, 23, 42, 0.98) !important;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
-        }
-        [data-testid="stDecoration"],
-        [data-testid="stToolbar"] {
             display: none !important;
         }
+        [data-testid="stDecoration"],
+        [data-testid="stToolbar"],
+        [data-testid="stSidebar"],
         [data-testid="collapsedControl"],
         [data-testid="stSidebarCollapsedControl"] {
-            position: fixed !important;
-            top: 0.85rem !important;
-            left: 0.85rem !important;
-            z-index: 1001 !important;
+            display: none !important;
         }
-        [data-testid="collapsedControl"] button,
-        [data-testid="stSidebarCollapsedControl"] button {
-            width: 2.8rem !important;
-            height: 2.8rem !important;
-            border-radius: 0.85rem !important;
-            background: #0f172a !important;
-            border: 1px solid rgba(148, 163, 184, 0.22) !important;
-            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24) !important;
+        [data-testid="stAppViewBlockContainer"] {
+            padding-top: 1rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            max-width: 100% !important;
         }
-        [data-testid="collapsedControl"] svg,
-        [data-testid="stSidebarCollapsedControl"] svg {
+        .app-shell {
+            max-width: 1480px;
+            margin: 0 auto;
+        }
+        .app-nav-rail {
+            position: sticky;
+            top: 1rem;
+        }
+        .app-nav-brand {
+            font-size: 2rem;
+            font-weight: 850;
+            color: #f8fbff;
+            letter-spacing: -0.03em;
+            margin-bottom: 0.85rem;
+        }
+        .app-nav-card {
+            background: #f8fbff;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 1rem;
+            padding: 1rem 0.95rem;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+            margin-bottom: 1rem;
+        }
+        .app-nav-user-name {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 0.2rem;
+        }
+        .app-nav-user-email {
+            font-size: 0.9rem;
+            color: #475569;
+            margin-bottom: 0.8rem;
+            word-break: break-word;
+        }
+        .app-nav-mini-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.45rem;
+        }
+        .app-nav-mini-item {
+            background: #f8fbff;
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            border-radius: 0.75rem;
+            padding: 0.45rem 0.4rem;
+            text-align: center;
+        }
+        .app-nav-mini-label {
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            margin-bottom: 0.18rem;
+        }
+        .app-nav-mini-value {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1.15;
+        }
+        .app-nav-links {
+            display: flex;
+            flex-direction: column;
+            gap: 0.48rem;
+            margin-bottom: 1rem;
+        }
+        .app-nav-link {
+            display: block;
+            width: 100%;
+            border-radius: 0.9rem;
+            padding: 0.7rem 0.85rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: #ffffff;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+            color: #0f172a !important;
+            text-decoration: none !important;
+            font-size: 0.98rem;
+            font-weight: 600;
+            line-height: 1.2;
+            transition: background 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+        }
+        .app-nav-link:hover {
+            background: rgba(96, 165, 250, 0.1);
+            border-color: rgba(96, 165, 250, 0.35);
+            color: #0f172a !important;
+        }
+        .app-nav-link.active {
+            background: #4f7cf0;
+            border-color: #4f7cf0;
+            color: #ffffff !important;
+            box-shadow: 0 10px 22px rgba(79, 124, 240, 0.22);
+        }
+        .app-nav-signout {
+            display: block;
+            width: 100%;
+            text-align: center;
+            border-radius: 0.85rem;
+            padding: 0.8rem 0.95rem;
+            border: 1px solid rgba(96, 165, 250, 0.35);
+            background: transparent;
             color: #dbeafe !important;
-            fill: #dbeafe !important;
+            text-decoration: none !important;
+            font-weight: 650;
         }
-        @media (max-width: 900px) {
-            [data-testid="collapsedControl"],
-            [data-testid="stSidebarCollapsedControl"] {
-                top: 0.65rem !important;
-                left: 0.65rem !important;
+        .app-nav-signout:hover {
+            background: rgba(96, 165, 250, 0.14);
+            border-color: #60a5fa;
+            color: #eff6ff !important;
+        }
+        @media (max-width: 960px) {
+            .app-nav-rail {
+                position: static;
+                margin-bottom: 1rem;
+            }
+            [data-testid="stAppViewBlockContainer"] {
+                padding-left: 0.8rem !important;
+                padding-right: 0.8rem !important;
             }
         }
         </style>
         """,
         unsafe_allow_html=True,
-    )
-
-
-def ensure_sidebar_open():
-    components.html(
-        """
-        <script>
-        (function () {
-          const root = window.parent.document;
-          const sidebar = root.querySelector('[data-testid="stSidebar"]');
-          const control = root.querySelector(
-            '[data-testid="stSidebarCollapsedControl"] button, [data-testid="collapsedControl"] button, [data-testid="stSidebarCollapsedControl"], [data-testid="collapsedControl"]'
-          );
-          if (!control) {
-            return;
-          }
-
-          let visible = false;
-          if (sidebar) {
-            const rect = sidebar.getBoundingClientRect();
-            const style = window.parent.getComputedStyle(sidebar);
-            visible =
-              rect.width > 120 &&
-              style.display !== 'none' &&
-              style.visibility !== 'hidden' &&
-              rect.right > 40;
-          }
-
-          if (!visible) {
-            setTimeout(() => {
-              try {
-                control.click();
-              } catch (e) {}
-            }, 120);
-          }
-        })();
-        </script>
-        """,
-        height=0,
     )
 
 
@@ -2519,6 +2576,61 @@ def split_service_values(value):
 
 def queue_navigation(target_page):
     st.session_state["_pending_nav_page"] = target_page
+
+
+def page_slug(page_label):
+    return re.sub(r"[^a-z0-9]+", "-", safe_text(page_label).lower()).strip("-")
+
+
+def page_href(page_label):
+    return f"?page={quote(page_slug(page_label))}"
+
+
+def resolve_app_page(nav_options):
+    slug_map = {page_slug(option): option for option in nav_options}
+    pending_nav_page = st.session_state.pop("_pending_nav_page", None)
+    if pending_nav_page in nav_options:
+        resolved_page = pending_nav_page
+        try:
+            st.query_params["page"] = page_slug(resolved_page)
+        except Exception:
+            pass
+    else:
+        requested_page_slug = safe_text(st.query_params.get("page")).strip().lower()
+        resolved_page = slug_map.get(requested_page_slug)
+
+    if resolved_page not in nav_options:
+        resolved_page = "Dashboard"
+    st.session_state["nav_page"] = resolved_page
+    return resolved_page
+
+
+def render_app_nav_rail(user, current_page, nav_options):
+    nav_links = "".join(
+        [
+            f'<a class="app-nav-link{" active" if label == current_page else ""}" href="{page_href(label)}">{escape(label)}</a>'
+            for label in nav_options
+        ]
+    )
+    st.markdown(
+        (
+            '<div class="app-nav-rail">'
+            f'<div class="app-nav-brand">{APP_NAME}</div>'
+            '<div class="app-nav-card">'
+            f'<div class="app-nav-user-name">{escape(user["full_name"])}</div>'
+            f'<div class="app-nav-user-email">{escape(user["email"])}</div>'
+            '<div class="app-nav-mini-grid">'
+            f'<div class="app-nav-mini-item"><div class="app-nav-mini-label">Credits</div><div class="app-nav-mini-value">{credits(user["id"])}</div></div>'
+            f'<div class="app-nav-mini-item"><div class="app-nav-mini-label">Plan</div><div class="app-nav-mini-value">{escape(user.get("plan_name") or "None")}</div></div>'
+            f'<div class="app-nav-mini-item"><div class="app-nav-mini-label">Status</div><div class="app-nav-mini-value">{escape(user.get("subscription_status", "inactive").title())}</div></div>'
+            "</div>"
+            "</div>"
+            f'<div class="app-nav-links">{nav_links}</div>'
+            '<a class="app-nav-signout" href="?action=signout">Sign Out</a>'
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
 
 
 def ensure_company_columns(company_df):
@@ -6204,6 +6316,17 @@ if user:
     set_current_user(user)
 
 params = st.query_params
+if user and safe_text(params.get("action")).strip().lower() == "signout":
+    set_current_user(None)
+    st.session_state.pop("nav_page", None)
+    for key in ["action", "page", "billing"]:
+        try:
+            if key in st.query_params:
+                del st.query_params[key]
+        except Exception:
+            pass
+    st.rerun()
+
 if params.get("billing") == "success" and user:
     user = sync_user_billing(user)
     set_current_user(user)
@@ -6213,66 +6336,40 @@ if not user:
     page_auth()
 else:
     inject_app_chrome_styles()
-    ensure_sidebar_open()
-    with st.sidebar:
-        st.markdown(f'<div class="sidebar-brand">{APP_NAME}</div>', unsafe_allow_html=True)
-        st.markdown(
-            (
-                '<div class="sidebar-card">'
-                f'<div class="sidebar-user-name">{escape(user["full_name"])}</div>'
-                f'<div class="sidebar-user-email">{escape(user["email"])}</div>'
-                '<div class="sidebar-mini-grid">'
-                f'<div class="sidebar-mini-item"><div class="sidebar-mini-label">Credits</div><div class="sidebar-mini-value">{credits(user["id"])}</div></div>'
-                f'<div class="sidebar-mini-item"><div class="sidebar-mini-label">Plan</div><div class="sidebar-mini-value">{escape(user.get("plan_name") or "None")}</div></div>'
-                f'<div class="sidebar-mini-item"><div class="sidebar-mini-label">Status</div><div class="sidebar-mini-value">{escape(user.get("subscription_status", "inactive").title())}</div></div>'
-                '</div>'
-                '</div>'
-            ),
-            unsafe_allow_html=True,
-        )
-        nav_options = [
-            "Dashboard",
-            "Plans & Billing",
-            "Service Profiles",
-            "Generate List",
-            "Saved Lists",
-            "Potential Expansions",
-            "Next Steps",
-        ]
-        if is_admin_user(user):
-            nav_options.append("Users")
-        pending_nav_page = st.session_state.pop("_pending_nav_page", None)
-        if pending_nav_page in nav_options:
-            st.session_state["nav_page"] = pending_nav_page
-        if st.session_state.get("nav_page") not in nav_options:
-            st.session_state["nav_page"] = "Dashboard"
-        page = st.radio(
-            "Navigate",
-            nav_options,
-            label_visibility="collapsed",
-            key="nav_page",
-        )
-        if st.button("Sign Out", type="secondary"):
-            set_current_user(None)
-            st.session_state.pop("nav_page", None)
-            st.rerun()
+    nav_options = [
+        "Dashboard",
+        "Plans & Billing",
+        "Service Profiles",
+        "Generate List",
+        "Saved Lists",
+        "Potential Expansions",
+        "Next Steps",
+    ]
+    if is_admin_user(user):
+        nav_options.append("Users")
+    page = resolve_app_page(nav_options)
 
-    if page == "Plans & Billing":
-        page_billing(user)
-    elif not portal_access_allowed(user):
-        st.warning("Your account needs an active subscription or available demo credits to use the portal.")
-        page_billing(user)
-    elif page == "Dashboard":
-        page_dashboard()
-    elif page == "Service Profiles":
-        page_services()
-    elif page == "Generate List":
-        page_generate()
-    elif page == "Next Steps":
-        page_next_steps()
-    elif page == "Potential Expansions":
-        page_potential_expansions()
-    elif page == "Users" and is_admin_user(user):
-        page_users()
-    else:
-        page_saved_lists()
+    nav_col, main_col = st.columns([1.1, 4.2], gap="large")
+    with nav_col:
+        render_app_nav_rail(user, page, nav_options)
+
+    with main_col:
+        if page == "Plans & Billing":
+            page_billing(user)
+        elif not portal_access_allowed(user):
+            st.warning("Your account needs an active subscription or available demo credits to use the portal.")
+            page_billing(user)
+        elif page == "Dashboard":
+            page_dashboard()
+        elif page == "Service Profiles":
+            page_services()
+        elif page == "Generate List":
+            page_generate()
+        elif page == "Next Steps":
+            page_next_steps()
+        elif page == "Potential Expansions":
+            page_potential_expansions()
+        elif page == "Users" and is_admin_user(user):
+            page_users()
+        else:
+            page_saved_lists()
