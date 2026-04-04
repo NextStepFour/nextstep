@@ -30,6 +30,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 APP_NAME = "NextStepSignal"
 APP_TAGLINE = "Market intelligence for operational expansion and opportunity discovery"
+DEFAULT_SERVICE_CATEGORY = "Generic"
 DB_PATH = os.getenv("NEXTSTEP_DB_PATH", "nextstep_portal.db")
 DEFAULT_CREDITS = 50
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "rgordon@heliovolta.com").strip().lower()
@@ -851,6 +852,37 @@ Rules:
 - Return JSON only"""
 
 
+SERVICE_DESCRIPTION_ENHANCE_PROMPT_TEMPLATE = """You are a service profile editor.
+
+Rewrite the user's rough service description into a short, factual, consistent format.
+
+Service category:
+{{SERVICE_CATEGORY}}
+
+Service name:
+{{SERVICE_NAME}}
+
+Draft description:
+{{SERVICE_DESCRIPTION}}
+
+Return valid JSON only:
+{
+  "service_description": ""
+}
+
+Rules:
+- Keep the tone factual and professional
+- Do not use marketing language or hype
+- Write 2 to 3 concise sentences
+- Sentence 1 should define what the service is and its main purpose
+- Sentence 2 should describe the typical work included
+- Sentence 3, if needed, should explain where or when the service is most relevant
+- Stay close to what the user wrote and the service name
+- Do not invent certifications, tools, sectors, or capabilities not supported by the input
+- If the draft is very rough, improve grammar and structure without adding unsupported claims
+- Return JSON only"""
+
+
 RESPONSE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -909,6 +941,17 @@ RESPONSE_SCHEMA = {
     },
     "required": ["results"],
 }
+
+
+SERVICE_DESCRIPTION_ENHANCE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "service_description": {"type": "string"},
+    },
+    "required": ["service_description"],
+}
+
 
 EXPANSION_PROMPT_TEMPLATE = """You are a market intelligence engine for solar service sales strategy.
 
@@ -1146,7 +1189,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS services (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
-                service_category TEXT NOT NULL DEFAULT 'General',
+                service_category TEXT NOT NULL DEFAULT 'Generic',
                 service_order INTEGER,
                 service_name TEXT NOT NULL,
                 service_description TEXT NOT NULL,
@@ -1228,7 +1271,7 @@ def init_db():
         if "user_id" not in service_columns:
             db.execute("ALTER TABLE services ADD COLUMN user_id INTEGER")
         if "service_category" not in service_columns:
-            db.execute("ALTER TABLE services ADD COLUMN service_category TEXT NOT NULL DEFAULT 'General'")
+            db.execute("ALTER TABLE services ADD COLUMN service_category TEXT NOT NULL DEFAULT 'Generic'")
         if "service_order" not in service_columns:
             db.execute("ALTER TABLE services ADD COLUMN service_order INTEGER")
         search_columns = [row["name"] for row in db.execute("PRAGMA table_info(searches)").fetchall()]
@@ -1246,6 +1289,10 @@ def init_db():
         deep_dive_columns = [row["name"] for row in db.execute("PRAGMA table_info(deep_dive_runs)").fetchall()]
         if deep_dive_columns and "user_id" not in deep_dive_columns:
             db.execute("ALTER TABLE deep_dive_runs ADD COLUMN user_id INTEGER")
+        db.execute(
+            "UPDATE services SET service_category = ? WHERE service_category IS NULL OR trim(service_category) = '' OR service_category = 'General'",
+            (DEFAULT_SERVICE_CATEGORY,),
+        )
 
 
 def hash_password(password):
@@ -1846,7 +1893,7 @@ def save_service(category, name, description, location_filter, user_id=None):
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user:
         raise ValueError("Please sign in to save service profiles.")
-    category_name = category.strip() or "General"
+    category_name = category.strip() or DEFAULT_SERVICE_CATEGORY
     with conn() as db:
         next_order = db.execute(
             "SELECT COALESCE(MAX(service_order), 0) + 1 FROM services WHERE user_id = ? AND service_category = ?",
@@ -1885,9 +1932,9 @@ def update_service_profile(service_id, category, name, description, location_fil
         if not existing:
             raise ValueError("Service profile not found.")
         existing = dict(existing)
-        new_category = category.strip() or "General"
+        new_category = category.strip() or DEFAULT_SERVICE_CATEGORY
         new_order = existing.get("service_order")
-        if safe_text(existing.get("service_category"), "General") != new_category:
+        if safe_text(existing.get("service_category"), DEFAULT_SERVICE_CATEGORY) != new_category:
             next_order = db.execute(
                 "SELECT COALESCE(MAX(service_order), 0) + 1 FROM services WHERE user_id = ? AND service_category = ?",
                 (user["id"], new_category),
@@ -1909,7 +1956,7 @@ def update_service_profile(service_id, category, name, description, location_fil
                 user["id"],
             ),
         )
-    if safe_text(existing.get("service_category"), "General") != new_category:
+    if safe_text(existing.get("service_category"), DEFAULT_SERVICE_CATEGORY) != new_category:
         resequence_service_category(existing.get("service_category"), user["id"])
     resequence_service_category(new_category, user["id"])
 
@@ -1940,7 +1987,7 @@ def resequence_service_category(category_name, user_id=None):
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user:
         return
-    category_name = safe_text(category_name, "General")
+    category_name = safe_text(category_name, DEFAULT_SERVICE_CATEGORY)
     with conn() as db:
         rows = db.execute(
             """
@@ -1980,7 +2027,7 @@ def move_service_within_category(service_id, direction, user_id=None):
     if row_match.empty:
         return
     row = row_match.iloc[0]
-    category_name = safe_text(row["service_category"], "General")
+    category_name = safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY)
     category_df = svc[svc["service_category"] == category_name].copy().reset_index(drop=True)
     current_idx = int(category_df.index[category_df["id"] == service_id][0])
     if direction == "up":
@@ -2003,7 +2050,7 @@ def build_service_option_map(svc_df):
         return {}
     working = prepare_service_map_df(svc_df)
     return {
-        f"#{int(row['service_number'])} | {safe_text(row.get('service_category'), 'General')} | {safe_text(row['service_name'], 'Untitled Service')}": row
+        f"#{int(row['service_number'])} | {safe_text(row.get('service_category'), DEFAULT_SERVICE_CATEGORY)} | {safe_text(row['service_name'], 'Untitled Service')}": row
         for _, row in working.iterrows()
     }
 
@@ -2012,7 +2059,7 @@ def prepare_service_map_df(svc_df):
     if svc_df.empty:
         return pd.DataFrame()
     working = svc_df.copy()
-    working["service_category"] = working["service_category"].fillna("General").replace("", "General")
+    working["service_category"] = working["service_category"].fillna(DEFAULT_SERVICE_CATEGORY).replace("", DEFAULT_SERVICE_CATEGORY).replace("General", DEFAULT_SERVICE_CATEGORY)
     if "service_order" not in working.columns:
         working["service_order"] = None
     working["_created_at_sort"] = pd.to_datetime(working["created_at"], errors="coerce")
@@ -2640,6 +2687,46 @@ def build_expansion_context(selected_services_df, evidence_df):
         )
 
     return json.dumps(services_payload, indent=2), json.dumps(evidence_payload, indent=2)
+
+
+def enhance_service_description(service_name, service_description, service_category=""):
+    cleaned_name = safe_text(service_name).strip()
+    cleaned_description = safe_text(service_description).strip()
+    cleaned_category = safe_text(service_category, DEFAULT_SERVICE_CATEGORY).strip() or DEFAULT_SERVICE_CATEGORY
+    if not cleaned_name and not cleaned_description:
+        raise ValueError("Enter a service name or draft description before enhancing it.")
+    if not cleaned_description:
+        raise ValueError("Enter a draft service description before enhancing it.")
+
+    api_client = client()
+    prompt = SERVICE_DESCRIPTION_ENHANCE_PROMPT_TEMPLATE
+    prompt = prompt.replace("{{SERVICE_CATEGORY}}", cleaned_category)
+    prompt = prompt.replace("{{SERVICE_NAME}}", cleaned_name or "Unnamed service")
+    prompt = prompt.replace("{{SERVICE_DESCRIPTION}}", cleaned_description)
+
+    response = api_client.responses.create(
+        model=SYNTHESIS_MODEL,
+        reasoning={"effort": "low"},
+        input=prompt,
+        text={
+            "format": {
+                "type": "json_schema",
+                "name": "nextstep_service_description_enhance",
+                "strict": True,
+                "schema": SERVICE_DESCRIPTION_ENHANCE_SCHEMA,
+            }
+        },
+    )
+    raw_json = response.output_text if getattr(response, "output_text", None) else ""
+    try:
+        parsed = json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        raise ValueError("The description enhancer returned an invalid response.") from exc
+
+    enhanced = safe_text(parsed.get("service_description")).strip()
+    if not enhanced:
+        raise ValueError("The description enhancer did not return usable text.")
+    return enhanced
 
 
 def analyze_expansions(api_client, selected_services_df, evidence_df):
@@ -5415,18 +5502,40 @@ def page_dashboard():
 
 def page_services():
     st.title("Service Profiles")
-    with st.form("service_form"):
-        category = st.text_input("Service Category", placeholder="Solar, Energy Storage, EV Charging")
-        name = st.text_input("Service")
-        description = st.text_area("Service description", height=180, placeholder="Describe the service, scope, titles, and keywords.")
-        location_filter = st.text_input("Default target location", value="Any U.S. location")
-        submit = st.form_submit_button("Save service profile")
-    if submit:
-        if not category.strip() or not name.strip() or not description.strip():
-            st.error("Please enter a service category, a service, and a service description.")
+    if st.session_state.pop("_reset_service_form", False):
+        st.session_state["service_category_input"] = ""
+        st.session_state["service_name_input"] = ""
+        st.session_state["service_description_input"] = ""
+        st.session_state["service_location_input"] = "Any U.S. location"
+    pending_enhanced_description = st.session_state.pop("_pending_service_description", None)
+    if pending_enhanced_description is not None:
+        st.session_state["service_description_input"] = pending_enhanced_description
+
+    category = st.text_input("Service Category", placeholder="Solar, Energy Storage, EV Charging", key="service_category_input")
+    name = st.text_input("Service", key="service_name_input")
+    description = st.text_area(
+        "Service description",
+        height=180,
+        placeholder="Describe the service, scope, titles, and keywords.",
+        key="service_description_input",
+    )
+    location_filter = st.text_input("Default target location", value="Any U.S. location", key="service_location_input")
+    enhance_col, save_col = st.columns([1, 1.35])
+    if enhance_col.button("Enhance", type="secondary", use_container_width=True):
+        try:
+            enhanced = enhance_service_description(name, description, category)
+            st.session_state["_pending_service_description"] = enhanced
+            st.success("Description enhanced.")
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Description could not be enhanced: {exc}")
+    if save_col.button("Save service profile", type="primary"):
+        if not name.strip() or not description.strip():
+            st.error("Please enter a service and a service description.")
         else:
             save_service(category, name, description, location_filter)
-            st.success("Service profile saved.")
+            st.session_state["_reset_service_form"] = True
+            st.success(f"Service profile saved under {safe_text(category.strip(), DEFAULT_SERVICE_CATEGORY) or DEFAULT_SERVICE_CATEGORY}.")
             st.rerun()
     ensure_service_orders()
     svc = services_df()
@@ -5560,7 +5669,7 @@ def page_services():
             st.markdown(
                 (
                     '<div class="service-category-header">'
-                    f'<div class="service-category-title">{escape(safe_text(category_name, "General"))}</div>'
+                    f'<div class="service-category-title">{escape(safe_text(category_name, DEFAULT_SERVICE_CATEGORY))}</div>'
                     f'<div class="service-category-subtitle">{len(category_df)} service{"s" if len(category_df) != 1 else ""} in this category.</div>'
                     '</div>'
                 ),
@@ -5576,7 +5685,7 @@ def page_services():
                     st.markdown(
                         (
                             f'<div class="service-quick-tile{active_class}">'
-                            f'<div class="service-quick-label">#{service_number} | {escape(safe_text(row["service_category"], "General"))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
+                            f'<div class="service-quick-label">#{service_number} | {escape(safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
                             '</div>'
                         ),
                         unsafe_allow_html=True,
@@ -5613,7 +5722,7 @@ def page_services():
                     st.markdown(
                         (
                             f'<div class="service-chip-tile{active_class}">'
-                            f'<div class="service-chip-label">#{service_number} | {escape(safe_text(row["service_category"], "General"))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
+                            f'<div class="service-chip-label">#{service_number} | {escape(safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
                             f'<div class="service-chip-description">{escape(description_preview or "No description available.")}</div>'
                             '<div class="service-chip-meta">'
                             f'Target location: {escape(safe_text(row["target_location"], "Any U.S. location"))}<br>'
@@ -5640,7 +5749,7 @@ def page_services():
                         with st.form(f"rename_service_form_{service_id}"):
                             new_category = st.text_input(
                                 "Service Category",
-                                value=safe_text(row["service_category"], "General"),
+                                value=safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY),
                                 key=f"rename_category_{service_id}",
                             )
                             new_title = st.text_input(
@@ -5663,8 +5772,8 @@ def page_services():
                             save_rename = form_col1.form_submit_button("Save")
                             cancel_rename = form_col2.form_submit_button("Cancel")
                         if save_rename:
-                            if not new_category.strip() or not new_title.strip() or not new_description.strip():
-                                st.error("Please enter a service category, service, and service description.")
+                            if not new_title.strip() or not new_description.strip():
+                                st.error("Please enter a service and service description.")
                             else:
                                 update_service_profile(
                                     service_id,
@@ -5782,7 +5891,7 @@ def page_generate():
                 run_name=f"{datetime.now().strftime('%Y-%m-%d %H:%M')} | {len(selected)} service(s)",
                 services_text="; ".join(
                     [
-                        f"{safe_text(options[label].get('service_category'), 'General')} | {options[label]['service_name']}"
+                    f"{safe_text(options[label].get('service_category'), DEFAULT_SERVICE_CATEGORY)} | {options[label]['service_name']}"
                         for label in selected
                     ]
                 ),
@@ -6335,14 +6444,14 @@ def page_potential_expansions():
         for category_name, category_df in selected_rows_preview.groupby("service_category", sort=False):
             chips_html = "".join(
                 [
-                    f'<div class="exp-service-chip">#{int(row["service_number"])} | {escape(safe_text(row["service_category"], "General"))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
+                    f'<div class="exp-service-chip">#{int(row["service_number"])} | {escape(safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
                     for _, row in category_df.iterrows()
                 ]
             )
             st.markdown(
                 (
                     '<div class="exp-service-category-box">'
-                    f'<div class="exp-service-category-title">{escape(safe_text(category_name, "General"))}</div>'
+                    f'<div class="exp-service-category-title">{escape(safe_text(category_name, DEFAULT_SERVICE_CATEGORY))}</div>'
                     f'<div class="exp-service-category-subtitle">{len(category_df)} selected service{"s" if len(category_df) != 1 else ""} in this category.</div>'
                     f'<div class="exp-service-chip-grid">{chips_html}</div>'
                     '</div>'
