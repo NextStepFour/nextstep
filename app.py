@@ -196,6 +196,12 @@ def inject_global_styles():
             --app-input: #232631;
             --app-text: #e5eefb;
             --app-text-soft: #d6e2f5;
+            --button-height: 3.25rem;
+            --button-radius: 0.95rem;
+            --button-padding-x: 1.18rem;
+            --button-font-size: 0.98rem;
+            --button-font-weight: 700;
+            --button-shadow: 0 12px 28px rgba(96, 165, 250, 0.18);
         }
         html,
         body,
@@ -264,8 +270,14 @@ def inject_global_styles():
             background: var(--brand-blue);
             color: #0f172a;
             border: 1px solid var(--brand-blue);
-            border-radius: 0.75rem;
-            font-weight: 650;
+            border-radius: var(--button-radius);
+            min-height: var(--button-height);
+            padding: 0 var(--button-padding-x);
+            font-size: var(--button-font-size);
+            font-weight: var(--button-font-weight);
+            line-height: 1;
+            box-shadow: var(--button-shadow);
+            transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
         }
         .stButton > button:hover,
         .stDownloadButton > button:hover,
@@ -273,16 +285,19 @@ def inject_global_styles():
             background: var(--brand-blue-dark);
             border-color: var(--brand-blue-dark);
             color: #0f172a;
+            box-shadow: 0 14px 32px rgba(79, 149, 236, 0.22);
         }
         .stButton > button[kind="secondary"] {
             background: transparent;
             color: #dbeafe;
             border: 1px solid var(--brand-border);
+            box-shadow: none;
         }
         .stButton > button[kind="secondary"]:hover {
             background: var(--brand-blue-soft);
             color: #e0f2fe;
             border-color: var(--brand-blue);
+            box-shadow: 0 10px 24px rgba(96, 165, 250, 0.08);
         }
         [data-baseweb="tab-list"] {
             gap: 0.4rem;
@@ -4309,14 +4324,22 @@ def page_auth():
             align-items: center;
             justify-content: center;
             min-width: 172px;
-            height: 54px;
-            padding: 0 1.35rem;
-            border-radius: 999px;
+            min-height: var(--button-height);
+            padding: 0 var(--button-padding-x);
+            border-radius: var(--button-radius);
             text-decoration: none !important;
             background: var(--brand-blue);
             color: #0f172a !important;
-            font-weight: 750;
+            font-size: var(--button-font-size);
+            font-weight: var(--button-font-weight);
             border: 1px solid var(--brand-blue);
+            box-shadow: var(--button-shadow);
+            transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+        }
+        .landing-topbar-cta:hover {
+            background: var(--brand-blue-dark);
+            border-color: var(--brand-blue-dark);
+            box-shadow: 0 14px 32px rgba(79, 149, 236, 0.22);
         }
         .auth-hero {
             position: relative;
@@ -4497,16 +4520,22 @@ def page_auth():
         .landing-signup-button {
             flex: 0 0 auto;
             min-width: 190px;
-            height: 64px;
-            padding: 0 1.4rem;
-            border-radius: 999px;
-            border: 0;
+            min-height: var(--button-height);
+            padding: 0 var(--button-padding-x);
+            border-radius: var(--button-radius);
+            border: 1px solid var(--brand-blue);
             background: var(--brand-blue);
             color: #0f172a;
-            font-size: 1rem;
-            font-weight: 760;
+            font-size: var(--button-font-size);
+            font-weight: var(--button-font-weight);
             cursor: pointer;
-            box-shadow: 0 16px 36px rgba(96, 165, 250, 0.22);
+            box-shadow: var(--button-shadow);
+            transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+        }
+        .landing-signup-button:hover {
+            background: var(--brand-blue-dark);
+            border-color: var(--brand-blue-dark);
+            box-shadow: 0 14px 32px rgba(79, 149, 236, 0.22);
         }
         .landing-anchor-button {
             display: inline-flex;
@@ -5045,19 +5074,23 @@ def page_auth():
             align-items: center;
             justify-content: center;
             width: 100%;
-            min-height: 3.25rem;
+            min-height: var(--button-height);
             margin: 0.15rem 0 0.9rem 0;
-            border-radius: 0.95rem;
+            padding: 0 var(--button-padding-x);
+            border-radius: var(--button-radius);
             border: 1px solid rgba(148, 163, 184, 0.18);
             background: rgba(255, 255, 255, 0.98);
             color: #0f172a !important;
-            font-weight: 700;
+            font-size: var(--button-font-size);
+            font-weight: var(--button-font-weight);
             text-decoration: none !important;
             box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+            transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
         }
         .google-auth-button:hover {
             background: #f8fbff;
             border-color: rgba(96, 165, 250, 0.35);
+            box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
         }
         .auth-divider {
             display: flex;
