@@ -21,6 +21,7 @@ from xml.sax.saxutils import escape
 import pandas as pd
 import stripe
 import streamlit as st
+import streamlit.components.v1 as components
 from openai import OpenAI
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
@@ -42,6 +43,8 @@ STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 DISCOVERY_MODEL = os.getenv("OPENAI_DISCOVERY_MODEL", "gpt-5-mini")
 SYNTHESIS_MODEL = os.getenv("OPENAI_SYNTHESIS_MODEL", "gpt-5-mini")
 PASSWORD_RESET_HOURS = int(os.getenv("PASSWORD_RESET_HOURS", "2"))
+AUTH_SESSION_HOURS = int(os.getenv("AUTH_SESSION_HOURS", "12"))
+AUTH_COOKIE_NAME = os.getenv("AUTH_COOKIE_NAME", "nss_session").strip() or "nss_session"
 SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
@@ -1123,6 +1126,19 @@ def init_db():
         )
         db.execute(
             """
+            CREATE TABLE IF NOT EXISTS auth_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                revoked_at TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+            """
+        )
+        db.execute(
+            """
             CREATE TABLE IF NOT EXISTS services (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -1247,6 +1263,107 @@ def verify_password(password, password_hash):
 
 def hash_reset_token(token):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def hash_auth_session_token(token):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def create_auth_session(user_id):
+    token = secrets.token_urlsafe(32)
+    token_hash = hash_auth_session_token(token)
+    now = datetime.now()
+    created_text = now.strftime("%Y-%m-%d %H:%M:%S")
+    expires_text = datetime.fromtimestamp(now.timestamp() + (AUTH_SESSION_HOURS * 3600)).strftime("%Y-%m-%d %H:%M:%S")
+    with conn() as db:
+        db.execute(
+            """
+            INSERT INTO auth_sessions (user_id, token_hash, created_at, expires_at, revoked_at)
+            VALUES (?, ?, ?, ?, NULL)
+            """,
+            (user_id, token_hash, created_text, expires_text),
+        )
+    return token
+
+
+def get_auth_session_record(token):
+    if not token:
+        return None
+    token_hash = hash_auth_session_token(token)
+    with conn() as db:
+        row = db.execute(
+            """
+            SELECT auth_sessions.*, users.email, users.full_name
+            FROM auth_sessions
+            JOIN users ON users.id = auth_sessions.user_id
+            WHERE auth_sessions.token_hash = ?
+              AND auth_sessions.revoked_at IS NULL
+            ORDER BY auth_sessions.id DESC
+            LIMIT 1
+            """,
+            (token_hash,),
+        ).fetchone()
+    if not row:
+        return None
+    record = dict(row)
+    expires_at = pd.to_datetime(record.get("expires_at"), errors="coerce")
+    if pd.isna(expires_at) or expires_at < pd.Timestamp.now():
+        revoke_auth_session(token)
+        return None
+    return record
+
+
+def touch_auth_session(token):
+    if not token:
+        return
+    token_hash = hash_auth_session_token(token)
+    expires_text = datetime.fromtimestamp(datetime.now().timestamp() + (AUTH_SESSION_HOURS * 3600)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    with conn() as db:
+        db.execute(
+            "UPDATE auth_sessions SET expires_at = ? WHERE token_hash = ? AND revoked_at IS NULL",
+            (expires_text, token_hash),
+        )
+
+
+def revoke_auth_session(token):
+    if not token:
+        return
+    token_hash = hash_auth_session_token(token)
+    revoked_text = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with conn() as db:
+        db.execute(
+            "UPDATE auth_sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL",
+            (revoked_text, token_hash),
+        )
+
+
+def sync_auth_cookie():
+    secure_cookie = APP_BASE_URL.lower().startswith("https://")
+    cookie_suffix = "; path=/; SameSite=Lax" + ("; Secure" if secure_cookie else "")
+    clear_requested = st.session_state.pop("_clear_auth_cookie", False)
+    cookie_value = st.session_state.pop("_set_auth_cookie_value", None)
+
+    if clear_requested:
+        components.html(
+            f"""
+            <script>
+            window.parent.document.cookie = {json.dumps(f"{AUTH_COOKIE_NAME}=; Max-Age=0{cookie_suffix}")};
+            </script>
+            """,
+            height=0,
+        )
+
+    if cookie_value:
+        components.html(
+            f"""
+            <script>
+            window.parent.document.cookie = {json.dumps(f"{AUTH_COOKIE_NAME}={cookie_value}; Max-Age={AUTH_SESSION_HOURS * 3600}{cookie_suffix}")};
+            </script>
+            """,
+            height=0,
+        )
 
 
 def smtp_ready():
@@ -1570,7 +1687,26 @@ def update_user_fields(user_id, **fields):
 
 
 def current_user():
-    return get_user_by_id(st.session_state.get("user_id"))
+    user_id = st.session_state.get("user_id")
+    if user_id:
+        auth_token = safe_text(st.session_state.get("auth_session_token"))
+        if auth_token:
+            touch_auth_session(auth_token)
+        return get_user_by_id(user_id)
+
+    auth_token = safe_text(st.context.cookies.get(AUTH_COOKIE_NAME))
+    if not auth_token:
+        return None
+
+    auth_session = get_auth_session_record(auth_token)
+    if not auth_session:
+        st.session_state["_clear_auth_cookie"] = True
+        return None
+
+    touch_auth_session(auth_token)
+    st.session_state["auth_session_token"] = auth_token
+    st.session_state["user_id"] = auth_session["user_id"]
+    return get_user_by_id(auth_session["user_id"])
 
 
 def set_current_user(user):
@@ -1578,6 +1714,29 @@ def set_current_user(user):
         st.session_state["user_id"] = user["id"]
     else:
         st.session_state.pop("user_id", None)
+
+
+def persist_login_session(user):
+    if not user:
+        return
+    existing_token = safe_text(st.session_state.get("auth_session_token"))
+    if existing_token:
+        revoke_auth_session(existing_token)
+    auth_token = create_auth_session(user["id"])
+    st.session_state["auth_session_token"] = auth_token
+    st.session_state["_set_auth_cookie_value"] = auth_token
+    st.session_state.pop("_clear_auth_cookie", None)
+
+
+def clear_login_session():
+    auth_token = safe_text(st.session_state.pop("auth_session_token", None))
+    if not auth_token:
+        auth_token = safe_text(st.context.cookies.get(AUTH_COOKIE_NAME))
+    if auth_token:
+        revoke_auth_session(auth_token)
+    st.session_state.pop("user_id", None)
+    st.session_state["_clear_auth_cookie"] = True
+    st.session_state.pop("_set_auth_cookie_value", None)
 
 
 def finalize_signed_in_user(user):
@@ -1590,6 +1749,7 @@ def finalize_signed_in_user(user):
         user = get_user_by_id(user["id"])
     user = sync_user_billing(user)
     set_current_user(user)
+    persist_login_session(user)
     return user
 
 
@@ -3791,7 +3951,7 @@ def render_auth_account_panel():
                 try:
                     user = create_user(full_name, email, password)
                     st.session_state.pop("landing_signup_email", None)
-                    set_current_user(user)
+                    finalize_signed_in_user(user)
                     st.success("Account created. You can use starter demo credits or subscribe below.")
                     st.rerun()
                 except ValueError as exc:
@@ -6322,7 +6482,7 @@ if user:
 
 params = st.query_params
 if user and safe_text(params.get("action")).strip().lower() == "signout":
-    set_current_user(None)
+    clear_login_session()
     st.session_state.pop("nav_page", None)
     for key in ["action", "page", "billing"]:
         try:
@@ -6336,6 +6496,8 @@ if params.get("billing") == "success" and user:
     user = sync_user_billing(user)
     set_current_user(user)
     st.success("Billing completed. Subscription status refreshed.")
+
+sync_auth_cookie()
 
 if not user:
     page_auth()
