@@ -21,6 +21,7 @@ from xml.sax.saxutils import escape
 import pandas as pd
 import stripe
 import streamlit as st
+import streamlit.components.v1 as components
 from openai import OpenAI
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
@@ -395,8 +396,10 @@ def inject_app_chrome_styles():
         """
         <style>
         [data-testid="stHeader"] {
-            background: transparent !important;
-            height: 0 !important;
+            display: block !important;
+            visibility: visible !important;
+            background: rgba(15, 23, 42, 0.98) !important;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
         }
         [data-testid="stDecoration"],
         [data-testid="stToolbar"] {
@@ -423,9 +426,55 @@ def inject_app_chrome_styles():
             color: #dbeafe !important;
             fill: #dbeafe !important;
         }
+        @media (max-width: 900px) {
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"] {
+                top: 0.65rem !important;
+                left: 0.65rem !important;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True,
+    )
+
+
+def ensure_sidebar_open():
+    components.html(
+        """
+        <script>
+        (function () {
+          const root = window.parent.document;
+          const sidebar = root.querySelector('[data-testid="stSidebar"]');
+          const control = root.querySelector(
+            '[data-testid="stSidebarCollapsedControl"] button, [data-testid="collapsedControl"] button, [data-testid="stSidebarCollapsedControl"], [data-testid="collapsedControl"]'
+          );
+          if (!control) {
+            return;
+          }
+
+          let visible = false;
+          if (sidebar) {
+            const rect = sidebar.getBoundingClientRect();
+            const style = window.parent.getComputedStyle(sidebar);
+            visible =
+              rect.width > 120 &&
+              style.display !== 'none' &&
+              style.visibility !== 'hidden' &&
+              rect.right > 40;
+          }
+
+          if (!visible) {
+            setTimeout(() => {
+              try {
+                control.click();
+              } catch (e) {}
+            }, 120);
+          }
+        })();
+        </script>
+        """,
+        height=0,
     )
 
 
@@ -6164,6 +6213,7 @@ if not user:
     page_auth()
 else:
     inject_app_chrome_styles()
+    ensure_sidebar_open()
     with st.sidebar:
         st.markdown(f'<div class="sidebar-brand">{APP_NAME}</div>', unsafe_allow_html=True)
         st.markdown(
