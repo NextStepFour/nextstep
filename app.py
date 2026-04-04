@@ -481,6 +481,7 @@ def inject_app_chrome_styles():
             margin-bottom: 1.2rem;
         }
         .app-nav-link-btn {
+            display: block;
             width: 100%;
             min-height: 2.7rem;
             border-radius: 0.85rem;
@@ -492,6 +493,7 @@ def inject_app_chrome_styles():
             text-align: left;
             cursor: pointer;
             transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+            text-decoration: none !important;
         }
         .app-nav-link-btn {
             background: transparent;
@@ -510,6 +512,7 @@ def inject_app_chrome_styles():
             box-shadow: 0 10px 22px rgba(79, 124, 240, 0.22);
         }
         .app-nav-signout-btn {
+            display: block;
             width: 100%;
             min-height: 2.7rem;
             border-radius: 0.85rem;
@@ -522,6 +525,7 @@ def inject_app_chrome_styles():
             text-align: left;
             font-size: 0.98rem;
             font-weight: 600;
+            text-decoration: none !important;
         }
         .app-nav-signout-btn:hover {
             background: rgba(96, 165, 250, 0.14);
@@ -2773,7 +2777,7 @@ def resolve_app_page(nav_options):
 def render_app_nav_rail(user, current_page, nav_options):
     nav_buttons_html = "".join(
         [
-            f'<button type="button" class="app-nav-link-btn{" active" if label == current_page else ""}" onclick="window.parent.location.search=\'?page={page_slug(label)}\'">{escape(label)}</button>'
+            f'<a class="app-nav-link-btn{" active" if label == current_page else ""}" href="{page_href(label)}" target="_self">{escape(label)}</a>'
             for label in nav_options
         ]
     )
@@ -2793,7 +2797,7 @@ def render_app_nav_rail(user, current_page, nav_options):
             '<div class="app-nav-divider"></div>'
             f'<div class="app-nav-links">{nav_buttons_html}</div>'
             '<div class="app-nav-divider"></div>'
-            '<button type="button" class="app-nav-signout-btn" onclick="window.parent.location.search=\'?action=signout\'">Sign Out</button>'
+            '<a class="app-nav-signout-btn" href="?action=signout" target="_self">Sign Out</a>'
             "</div>"
         ),
         unsafe_allow_html=True,
