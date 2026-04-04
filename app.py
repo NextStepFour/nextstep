@@ -5858,6 +5858,9 @@ def page_services():
     st.title("Service Profiles")
     service_action = safe_text(st.query_params.get("service_action")).strip().lower()
     service_action_id = safe_text(st.query_params.get("service_id")).strip()
+    query_rename_id = None
+    query_delete_id = None
+    query_focus_id = None
     if service_action and service_action_id:
         try:
             action_service_id = int(service_action_id)
@@ -5865,21 +5868,29 @@ def page_services():
             action_service_id = None
         if action_service_id:
             if service_action == "edit":
+                query_rename_id = action_service_id
+                query_focus_id = action_service_id
                 st.session_state["service_rename_id"] = action_service_id
                 st.session_state["service_focus_id"] = action_service_id
                 st.session_state.pop("service_delete_id", None)
             elif service_action == "delete":
+                query_delete_id = action_service_id
+                query_focus_id = action_service_id
                 st.session_state["service_delete_id"] = action_service_id
                 st.session_state["service_focus_id"] = action_service_id
                 st.session_state.pop("service_rename_id", None)
             elif service_action == "up":
                 move_service_within_category(action_service_id, "up")
                 st.session_state["service_focus_id"] = action_service_id
+                clear_service_action_query_params()
+                st.rerun()
             elif service_action == "down":
                 move_service_within_category(action_service_id, "down")
                 st.session_state["service_focus_id"] = action_service_id
-        clear_service_action_query_params()
-        st.rerun()
+                clear_service_action_query_params()
+                st.rerun()
+        if service_action in {"edit", "delete"}:
+            clear_service_action_query_params()
     if st.session_state.pop("_reset_service_form", False):
         st.session_state["service_category_input"] = ""
         st.session_state["service_category_select"] = SERVICE_CATEGORY_DEFAULT_OPTION
@@ -6123,9 +6134,9 @@ def page_services():
 
         svc = prepare_service_map_df(svc)
 
-        rename_id = st.session_state.get("service_rename_id")
-        delete_id = st.session_state.get("service_delete_id")
-        focus_id = st.session_state.get("service_focus_id")
+        rename_id = query_rename_id if query_rename_id is not None else st.session_state.get("service_rename_id")
+        delete_id = query_delete_id if query_delete_id is not None else st.session_state.get("service_delete_id")
+        focus_id = query_focus_id if query_focus_id is not None else st.session_state.get("service_focus_id")
         for category_name, category_df in svc.groupby("service_category", sort=False):
             st.markdown(
                 (
