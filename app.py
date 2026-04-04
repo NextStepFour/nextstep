@@ -4516,6 +4516,23 @@ def page_auth():
             max-width: 1120px;
             margin: 0 auto;
         }
+        .auth-page-title {
+            font-size: clamp(2.9rem, 5.2vw, 4.25rem);
+            line-height: 1.04;
+            font-weight: 560;
+            color: #eff6ff;
+            margin-bottom: 1rem;
+            max-width: 14ch;
+            letter-spacing: -0.04em;
+        }
+        .auth-page-subtitle {
+            color: #cbd5e1;
+            font-size: 1.36rem;
+            line-height: 1.48;
+            max-width: 34ch;
+            margin-bottom: 1rem;
+            font-weight: 400;
+        }
         .auth-page-topbar {
             display: flex;
             align-items: center;
@@ -4540,6 +4557,12 @@ def page_auth():
             .landing-copy {
                 max-width: 46rem;
                 padding-top: 0.25rem;
+            }
+            .auth-page-title {
+                max-width: 12ch;
+            }
+            .auth-page-subtitle {
+                max-width: 30ch;
             }
             .landing-proof-grid,
             .landing-work-grid,
@@ -4596,6 +4619,14 @@ def page_auth():
             .landing-subtitle {
                 font-size: 1.1rem;
                 max-width: 24ch;
+            }
+            .auth-page-title {
+                font-size: clamp(2.55rem, 11vw, 3.4rem);
+                max-width: 100%;
+            }
+            .auth-page-subtitle {
+                font-size: 1.08rem;
+                max-width: 100%;
             }
             .landing-signup-form {
                 flex-direction: column;
@@ -4658,8 +4689,8 @@ def page_auth():
                 if auth_view == "signup"
                 else "Sign in to continue working with your saved services, lists, and market analysis."
             )
-            st.markdown(f'<div class="landing-title" style="font-size:2.8rem; max-width:11ch;">{page_title}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="landing-subtitle">{page_copy}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="auth-page-title">{page_title}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="auth-page-subtitle">{page_copy}</div>', unsafe_allow_html=True)
             st.markdown('<div class="landing-auth-shell">', unsafe_allow_html=True)
             render_auth_account_panel()
             st.markdown("</div>", unsafe_allow_html=True)
