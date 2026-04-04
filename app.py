@@ -178,9 +178,6 @@ def inject_global_styles():
             --brand-border: rgba(96, 165, 250, 0.35);
             --panel-border: rgba(255, 255, 255, 0.08);
         }
-        [data-testid="stHeader"] {
-            display: none;
-        }
         [data-testid="stAppViewBlockContainer"] {
             padding-top: 0 !important;
         }
@@ -366,6 +363,61 @@ def inject_global_styles():
 
 
 inject_global_styles()
+
+
+def inject_auth_chrome_styles():
+    st.markdown(
+        """
+        <style>
+        [data-testid="stHeader"] {
+            display: none !important;
+        }
+        [data-testid="stAppViewBlockContainer"] {
+            padding-top: 0.35rem !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def inject_app_chrome_styles():
+    st.markdown(
+        """
+        <style>
+        [data-testid="stHeader"] {
+            background: transparent !important;
+            height: 0 !important;
+        }
+        [data-testid="stDecoration"],
+        [data-testid="stToolbar"] {
+            display: none !important;
+        }
+        [data-testid="collapsedControl"],
+        [data-testid="stSidebarCollapsedControl"] {
+            position: fixed !important;
+            top: 0.85rem !important;
+            left: 0.85rem !important;
+            z-index: 1001 !important;
+        }
+        [data-testid="collapsedControl"] button,
+        [data-testid="stSidebarCollapsedControl"] button {
+            width: 2.8rem !important;
+            height: 2.8rem !important;
+            border-radius: 0.85rem !important;
+            background: #0f172a !important;
+            border: 1px solid rgba(148, 163, 184, 0.22) !important;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24) !important;
+        }
+        [data-testid="collapsedControl"] svg,
+        [data-testid="stSidebarCollapsedControl"] svg {
+            color: #dbeafe !important;
+            fill: #dbeafe !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def auth_space_scene_html():
@@ -3394,6 +3446,7 @@ def render_landing_signup_capture():
 
 
 def page_auth():
+    inject_auth_chrome_styles()
     reset_token = st.query_params.get("reset_token")
     auth_view = safe_text(st.query_params.get("auth")).lower()
     signup_email_prefill = safe_text(st.query_params.get("signup_email"))
@@ -3402,9 +3455,6 @@ def page_auth():
     st.markdown(
         """
         <style>
-        [data-testid="stAppViewBlockContainer"] {
-            padding-top: 0.35rem;
-        }
         .landing-topbar {
             position: fixed;
             top: 0;
@@ -5807,6 +5857,7 @@ if params.get("billing") == "success" and user:
 if not user:
     page_auth()
 else:
+    inject_app_chrome_styles()
     with st.sidebar:
         st.markdown(f'<div class="sidebar-brand">{APP_NAME}</div>', unsafe_allow_html=True)
         st.markdown(
