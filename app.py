@@ -288,16 +288,16 @@ def inject_global_styles():
             box-shadow: 0 14px 32px rgba(79, 149, 236, 0.22);
         }
         .stButton > button[kind="secondary"] {
-            background: transparent;
-            color: #dbeafe;
-            border: 1px solid var(--brand-border);
-            box-shadow: none;
+            background: var(--brand-blue);
+            color: #0f172a;
+            border: 1px solid var(--brand-blue);
+            box-shadow: var(--button-shadow);
         }
         .stButton > button[kind="secondary"]:hover {
-            background: var(--brand-blue-soft);
-            color: #e0f2fe;
-            border-color: var(--brand-blue);
-            box-shadow: 0 10px 24px rgba(96, 165, 250, 0.08);
+            background: var(--brand-blue-dark);
+            color: #0f172a;
+            border-color: var(--brand-blue-dark);
+            box-shadow: 0 14px 32px rgba(79, 149, 236, 0.22);
         }
         [data-baseweb="tab-list"] {
             gap: 0.4rem;
@@ -5710,8 +5710,8 @@ def page_services():
         key="service_description_input",
     )
     location_filter = st.text_input("Default target location", value="Any U.S. location", key="service_location_input")
-    enhance_col, save_col = st.columns([1, 1.35])
-    if enhance_col.button("Enhance", type="secondary", use_container_width=True):
+    enhance_col, save_col = st.columns(2)
+    if enhance_col.button("Enhance", type="primary", use_container_width=True):
         try:
             enhanced = enhance_service_description(name, description, category)
             st.session_state["_pending_service_description"] = enhanced
@@ -5719,7 +5719,7 @@ def page_services():
             st.rerun()
         except Exception as exc:
             st.error(f"Description could not be enhanced: {exc}")
-    if save_col.button("Save service profile", type="primary"):
+    if save_col.button("Save service profile", type="primary", use_container_width=True):
         if not name.strip() or not description.strip():
             st.error("Please enter a service and a service description.")
         else:
@@ -5925,12 +5925,12 @@ def page_services():
                     )
 
                     action_col1, action_col2 = st.columns(2)
-                    if action_col1.button("Edit Service", key=f"edit_service_{service_id}", use_container_width=True):
+                    if action_col1.button("Edit Service", key=f"edit_service_{service_id}", type="primary", use_container_width=True):
                         st.session_state["service_rename_id"] = service_id
                         st.session_state["service_focus_id"] = service_id
                         st.session_state.pop("service_delete_id", None)
                         st.rerun()
-                    if action_col2.button("Delete", key=f"delete_service_{service_id}", use_container_width=True):
+                    if action_col2.button("Delete", key=f"delete_service_{service_id}", type="primary", use_container_width=True):
                         st.session_state["service_delete_id"] = service_id
                         st.session_state["service_focus_id"] = service_id
                         st.session_state.pop("service_rename_id", None)
@@ -5960,8 +5960,8 @@ def page_services():
                                 key=f"rename_location_{service_id}",
                             )
                             form_col1, form_col2 = st.columns(2)
-                            save_rename = form_col1.form_submit_button("Save")
-                            cancel_rename = form_col2.form_submit_button("Cancel")
+                            save_rename = form_col1.form_submit_button("Save", type="primary", use_container_width=True)
+                            cancel_rename = form_col2.form_submit_button("Cancel", type="primary", use_container_width=True)
                         if save_rename:
                             if not new_title.strip() or not new_description.strip():
                                 st.error("Please enter a service and service description.")
@@ -5984,8 +5984,8 @@ def page_services():
                         st.warning("Delete this service profile?")
                         with st.form(f"delete_service_form_{service_id}"):
                             confirm_col1, confirm_col2 = st.columns(2)
-                            confirm_delete = confirm_col1.form_submit_button("Confirm Delete", use_container_width=True)
-                            cancel_delete = confirm_col2.form_submit_button("Cancel", use_container_width=True)
+                            confirm_delete = confirm_col1.form_submit_button("Confirm Delete", type="primary", use_container_width=True)
+                            cancel_delete = confirm_col2.form_submit_button("Cancel", type="primary", use_container_width=True)
                         if confirm_delete:
                             delete_service(service_id)
                             st.session_state.pop("service_delete_id", None)
