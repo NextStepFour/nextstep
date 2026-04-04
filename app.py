@@ -12,6 +12,7 @@ import statistics
 import time
 from datetime import datetime
 from email.message import EmailMessage
+from urllib.parse import quote
 from xml.sax.saxutils import escape
 
 import pandas as pd
@@ -417,6 +418,73 @@ def auth_space_scene_html():
     )
 
 
+def landing_hero_visual_html():
+    svg = """
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 840" fill="none">
+      <defs>
+        <linearGradient id="heroBg" x1="600" y1="0" x2="600" y2="840" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#13213B"/>
+          <stop offset="1" stop-color="#0B1220"/>
+        </linearGradient>
+        <linearGradient id="heroPanel" x1="170" y1="204" x2="930" y2="324" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#1D4ED8"/>
+          <stop offset="1" stop-color="#60A5FA"/>
+        </linearGradient>
+        <linearGradient id="cardFill" x1="0" y1="0" x2="1" y2="1">
+          <stop stop-color="#F8FBFF"/>
+          <stop offset="1" stop-color="#EEF4FF"/>
+        </linearGradient>
+        <radialGradient id="heroGlowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(260 160) rotate(32) scale(320 220)">
+          <stop stop-color="#7DD3FC" stop-opacity="0.38"/>
+          <stop offset="1" stop-color="#7DD3FC" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="heroGlowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(915 180) rotate(140) scale(340 240)">
+          <stop stop-color="#60A5FA" stop-opacity="0.32"/>
+          <stop offset="1" stop-color="#60A5FA" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="shadowSoft" x="34" y="36" width="1132" height="768" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+          <feDropShadow dx="0" dy="28" stdDeviation="34" flood-color="#020617" flood-opacity="0.34"/>
+        </filter>
+        <filter id="shadowFloat" x="28" y="120" width="1150" height="590" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+          <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#020617" flood-opacity="0.18"/>
+        </filter>
+      </defs>
+
+      <rect width="1200" height="840" rx="38" fill="url(#heroBg)"/>
+      <ellipse cx="590" cy="292" rx="470" ry="226" stroke="#334155" stroke-opacity="0.40" stroke-width="2"/>
+      <ellipse cx="660" cy="614" rx="365" ry="172" stroke="#334155" stroke-opacity="0.28" stroke-width="2"/>
+      <rect width="1200" height="840" rx="38" fill="url(#heroGlowA)"/>
+      <rect width="1200" height="840" rx="38" fill="url(#heroGlowB)"/>
+
+      <g filter="url(#shadowSoft)">
+        <rect x="108" y="106" width="980" height="620" rx="42" fill="#F8FBFF"/>
+        <rect x="108" y="106" width="980" height="620" rx="42" stroke="#DCE5F2"/>
+        <rect x="108" y="106" width="980" height="64" rx="42" fill="#F9FBFF"/>
+        <path d="M108 170H1088" stroke="#D7E0ED"/>
+        <circle cx="150" cy="138" r="7" fill="#CBD5E1"/>
+        <circle cx="174" cy="138" r="7" fill="#CBD5E1"/>
+        <circle cx="198" cy="138" r="7" fill="#CBD5E1"/>
+
+        <rect x="160" y="204" width="802" height="124" rx="28" fill="url(#heroPanel)"/>
+        <rect x="160" y="366" width="438" height="224" rx="26" fill="url(#cardFill)" stroke="#D6E0EE"/>
+        <rect x="632" y="366" width="330" height="88" rx="22" fill="#FFFFFF" stroke="#E2E8F0"/>
+        <rect x="632" y="490" width="330" height="88" rx="22" fill="#FFFFFF" stroke="#E2E8F0"/>
+        <rect x="160" y="626" width="438" height="86" rx="22" fill="url(#cardFill)" stroke="#D6E0EE"/>
+      </g>
+
+      <g filter="url(#shadowFloat)">
+        <rect x="880" y="182" width="240" height="180" rx="30" fill="white" fill-opacity="0.78" stroke="#E2E8F0"/>
+        <rect x="66" y="590" width="166" height="154" rx="28" fill="white" fill-opacity="0.82" stroke="#E2E8F0"/>
+      </g>
+    </svg>
+    """
+    return (
+        '<div class="landing-hero-art-wrap">'
+        f'<img class="landing-hero-art" alt="" src="data:image/svg+xml;utf8,{quote(svg)}" />'
+        '</div>'
+    )
+
+
 def landing_marketing_mockup_html(kind="hero"):
     if kind == "list":
         return """
@@ -510,32 +578,7 @@ def landing_marketing_mockup_html(kind="hero"):
             </div>
         </div>
         """
-    return """
-    <div class="landing-mockup-wrap landing-mockup-hero">
-        <div class="hero-clean-shell">
-            <div class="hero-clean-orbit orbit-a"></div>
-            <div class="hero-clean-orbit orbit-b"></div>
-            <div class="hero-clean-browser">
-                <div class="hero-clean-bar">
-                    <span class="hero-clean-dot"></span>
-                    <span class="hero-clean-dot"></span>
-                    <span class="hero-clean-dot"></span>
-                </div>
-                <div class="hero-clean-body">
-                    <div class="hero-clean-panel hero-clean-panel-large"></div>
-                    <div class="hero-clean-grid">
-                        <div class="hero-clean-card tall"></div>
-                        <div class="hero-clean-card"></div>
-                        <div class="hero-clean-card"></div>
-                        <div class="hero-clean-card wide"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="hero-clean-float float-top"></div>
-            <div class="hero-clean-float float-bottom"></div>
-        </div>
-    </div>
-    """
+    return landing_hero_visual_html()
 
 
 def render_landing_feature_band(title, copy, bullets, kind, tone="soft"):
@@ -3688,6 +3731,18 @@ def page_auth():
             align-items: flex-start;
             justify-content: flex-start;
             padding-top: 0.9rem;
+        }
+        .landing-hero-art-wrap {
+            width: 100%;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+        }
+        .landing-hero-art {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-width: 100%;
         }
         .hero-clean-shell {
             position: relative;
