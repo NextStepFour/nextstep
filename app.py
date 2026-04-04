@@ -13,6 +13,9 @@ import time
 from datetime import datetime
 from email.message import EmailMessage
 from urllib.parse import quote
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from xml.sax.saxutils import escape
 
 import pandas as pd
@@ -45,6 +48,12 @@ SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "").strip()
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "1").strip() not in {"0", "false", "False"}
+GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
+GOOGLE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
+GOOGLE_OAUTH_SCOPES = "openid email profile"
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 PLANS = {
     "starter": {
         "name": "Starter",
@@ -976,6 +985,7 @@ def init_db():
                 full_name TEXT NOT NULL,
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
+                google_sub TEXT,
                 is_admin INTEGER NOT NULL DEFAULT 0,
                 stripe_customer_id TEXT,
                 subscription_status TEXT NOT NULL DEFAULT 'inactive',
@@ -1074,6 +1084,11 @@ def init_db():
         user_columns = [row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()]
         if "is_admin" not in user_columns:
             db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+        if "google_sub" not in user_columns:
+            db.execute("ALTER TABLE users ADD COLUMN google_sub TEXT")
+        db.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL"
+        )
         db.execute(
             "UPDATE users SET is_admin = 1 WHERE lower(email) = ?",
             (ADMIN_EMAIL,),
@@ -1236,12 +1251,133 @@ def send_password_reset_email(email):
     return True
 
 
+def google_oauth_ready():
+    return bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET and APP_BASE_URL)
+
+
+def google_redirect_uri():
+    return f"{APP_BASE_URL}?auth=google"
+
+
+def make_signed_state_token():
+    issued_at = str(int(time.time()))
+    raw_token = secrets.token_urlsafe(24)
+    payload = f"{issued_at}.{raw_token}"
+    signature = hmac.new(
+        GOOGLE_OAUTH_CLIENT_SECRET.encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{payload}.{signature}"
+
+
+def valid_signed_state_token(state_token, max_age_seconds=900):
+    try:
+        issued_at_text, raw_token, provided_signature = state_token.split(".", 2)
+        issued_at = int(issued_at_text)
+    except (AttributeError, TypeError, ValueError):
+        return False
+    payload = f"{issued_at}.{raw_token}"
+    expected_signature = hmac.new(
+        GOOGLE_OAUTH_CLIENT_SECRET.encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(provided_signature, expected_signature):
+        return False
+    return (time.time() - issued_at) <= max_age_seconds
+
+
+def build_google_auth_url():
+    if not google_oauth_ready():
+        return ""
+    state_token = make_signed_state_token()
+    params = {
+        "client_id": GOOGLE_OAUTH_CLIENT_ID,
+        "redirect_uri": google_redirect_uri(),
+        "response_type": "code",
+        "scope": GOOGLE_OAUTH_SCOPES,
+        "access_type": "online",
+        "include_granted_scopes": "true",
+        "prompt": "select_account",
+        "state": state_token,
+    }
+    return f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
+
+
+def http_json(url, method="GET", data=None, headers=None):
+    request_headers = dict(headers or {})
+    body = None
+    if data is not None:
+        body = urlencode(data).encode("utf-8")
+        request_headers.setdefault("Content-Type", "application/x-www-form-urlencoded")
+    request = Request(url, data=body, headers=request_headers, method=method)
+    try:
+        with urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        try:
+            payload = json.loads(exc.read().decode("utf-8"))
+            message = safe_text(payload.get("error_description")) or safe_text(payload.get("error"))
+        except Exception:
+            message = ""
+        raise ValueError(message or "Google sign-in could not be completed.") from exc
+    except URLError as exc:
+        raise ValueError("Google sign-in is unavailable right now. Please try again.") from exc
+
+
+def fetch_google_userinfo(access_token):
+    request = Request(
+        GOOGLE_USERINFO_URL,
+        headers={"Authorization": f"Bearer {access_token}"},
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        raise ValueError("Google account details could not be verified.") from exc
+    except URLError as exc:
+        raise ValueError("Google account details could not be loaded right now.") from exc
+
+
+def finish_google_sign_in(code, state_token):
+    if not google_oauth_ready():
+        raise ValueError("Google sign-in is not configured yet.")
+    if not valid_signed_state_token(state_token):
+        raise ValueError("Google sign-in could not be verified. Please try again.")
+    token_payload = http_json(
+        GOOGLE_TOKEN_URL,
+        method="POST",
+        data={
+            "code": code,
+            "client_id": GOOGLE_OAUTH_CLIENT_ID,
+            "client_secret": GOOGLE_OAUTH_CLIENT_SECRET,
+            "redirect_uri": google_redirect_uri(),
+            "grant_type": "authorization_code",
+        },
+    )
+    access_token = safe_text(token_payload.get("access_token"))
+    if not access_token:
+        raise ValueError("Google sign-in did not return an access token.")
+    google_profile = fetch_google_userinfo(access_token)
+    return get_or_create_google_user(google_profile)
+
+
 def get_user_by_email(email):
     with conn() as db:
         row = db.execute(
             "SELECT * FROM users WHERE lower(email) = lower(?)",
             (email.strip(),),
         ).fetchone()
+    return dict(row) if row else None
+
+
+def get_user_by_google_sub(google_sub):
+    if not google_sub:
+        return None
+    with conn() as db:
+        row = db.execute("SELECT * FROM users WHERE google_sub = ?", (google_sub.strip(),)).fetchone()
     return dict(row) if row else None
 
 
@@ -1259,7 +1395,7 @@ def is_admin_user(user):
     return bool(int(user.get("is_admin") or 0))
 
 
-def create_user(full_name, email, password):
+def create_user(full_name, email, password, google_sub=None):
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M")
     normalized_email = email.strip().lower()
     wants_admin_email = normalized_email == ADMIN_EMAIL
@@ -1269,20 +1405,48 @@ def create_user(full_name, email, password):
         cursor = db.execute(
             """
             INSERT INTO users (
-                full_name, email, password_hash, is_admin, subscription_status,
+                full_name, email, password_hash, google_sub, is_admin, subscription_status,
                 plan_name, monthly_credit_allowance, credit_balance, created_at
-            ) VALUES (?, ?, ?, ?, 'inactive', null, 0, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, 'inactive', null, 0, ?, ?)
             """,
             (
                 full_name.strip(),
                 normalized_email,
                 hash_password(password),
+                google_sub.strip() if google_sub else None,
                 is_admin,
                 starting_credits,
                 created_at,
             ),
         )
     return get_user_by_id(cursor.lastrowid)
+
+
+def get_or_create_google_user(google_profile):
+    google_sub = safe_text(google_profile.get("sub"))
+    email = safe_text(google_profile.get("email")).lower()
+    full_name = safe_text(google_profile.get("name")) or email.split("@")[0]
+    email_verified = str(google_profile.get("email_verified")).lower() == "true"
+
+    if not google_sub:
+        raise ValueError("Google sign-in did not return a valid account identifier.")
+    if not email:
+        raise ValueError("Google sign-in did not return an email address.")
+    if not email_verified:
+        raise ValueError("Google account email must be verified before signing in.")
+
+    user = get_user_by_google_sub(google_sub)
+    if user:
+        update_user_fields(user["id"], full_name=full_name, email=email)
+        return get_user_by_id(user["id"])
+
+    user = get_user_by_email(email)
+    if user:
+        update_user_fields(user["id"], full_name=full_name, google_sub=google_sub)
+        return get_user_by_id(user["id"])
+
+    temp_password = secrets.token_urlsafe(32)
+    return create_user(full_name, email, temp_password, google_sub=google_sub)
 
 
 def update_user_fields(user_id, **fields):
@@ -1303,6 +1467,19 @@ def set_current_user(user):
         st.session_state["user_id"] = user["id"]
     else:
         st.session_state.pop("user_id", None)
+
+
+def finalize_signed_in_user(user):
+    if user.get("email", "").strip().lower() == ADMIN_EMAIL:
+        update_user_fields(
+            user["id"],
+            is_admin=1,
+            credit_balance=max(int(user.get("credit_balance") or 0), ADMIN_DEMO_CREDITS),
+        )
+        user = get_user_by_id(user["id"])
+    user = sync_user_billing(user)
+    set_current_user(user)
+    return user
 
 
 def credits(user_id=None):
@@ -3304,12 +3481,43 @@ def portal_access_allowed(user):
     return user.get("subscription_status") in {"active", "trialing"} or int(user.get("credit_balance") or 0) > 0
 
 
+def set_auth_notice(level, message):
+    st.session_state["auth_notice"] = {"level": level, "message": message}
+
+
+def render_auth_notice():
+    notice = st.session_state.pop("auth_notice", None)
+    if not notice:
+        return
+    level = safe_text(notice.get("level"), "info").lower()
+    message = safe_text(notice.get("message"))
+    if not message:
+        return
+    if level == "success":
+        st.success(message)
+    elif level == "warning":
+        st.warning(message)
+    elif level == "error":
+        st.error(message)
+    else:
+        st.info(message)
+
+
 def clear_reset_query_param():
     try:
         if "reset_token" in st.query_params:
             del st.query_params["reset_token"]
     except Exception:
         pass
+
+
+def clear_google_query_params():
+    for key in ["auth", "code", "state", "scope", "authuser", "prompt", "error"]:
+        try:
+            if key in st.query_params:
+                del st.query_params[key]
+        except Exception:
+            pass
 
 
 def render_auth_reset_panel(reset_token):
@@ -3345,6 +3553,16 @@ def render_auth_reset_panel(reset_token):
         st.rerun()
 
 
+def render_google_auth_button():
+    if google_oauth_ready():
+        st.markdown(
+            f'<a class="google-auth-button" href="{escape(build_google_auth_url())}">Continue with Google</a>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.caption("Google sign-in will appear here after Google OAuth is configured.")
+
+
 def render_auth_account_panel():
     auth_mode = st.session_state.get("landing_auth_mode", "Create Account")
     signup_first = auth_mode == "Create Account"
@@ -3359,6 +3577,8 @@ def render_auth_account_panel():
         signup_tab = auth_tabs[1]
 
     with login_tab:
+        render_google_auth_button()
+        st.markdown('<div class="auth-divider"><span>or continue with email</span></div>', unsafe_allow_html=True)
         with st.form("login_form"):
             email = st.text_input("Email", key="login_email")
             password = st.text_input("Password", type="password", key="login_password")
@@ -3368,15 +3588,7 @@ def render_auth_account_panel():
             if not user or not verify_password(password, user["password_hash"]):
                 st.error("Invalid email or password.")
             else:
-                if user.get("email", "").strip().lower() == ADMIN_EMAIL:
-                    update_user_fields(
-                        user["id"],
-                        is_admin=1,
-                        credit_balance=max(int(user.get("credit_balance") or 0), ADMIN_DEMO_CREDITS),
-                    )
-                    user = get_user_by_id(user["id"])
-                user = sync_user_billing(user)
-                set_current_user(user)
+                finalize_signed_in_user(user)
                 st.success("Signed in.")
                 st.rerun()
         with st.expander("Forgot password?"):
@@ -3393,6 +3605,8 @@ def render_auth_account_panel():
                     st.error("Password reset email could not be sent right now.")
 
     with signup_tab:
+        render_google_auth_button()
+        st.markdown('<div class="auth-divider"><span>or create with email</span></div>', unsafe_allow_html=True)
         with st.form("signup_form"):
             full_name = st.text_input("Full name", key="signup_name")
             email = st.text_input(
@@ -3452,6 +3666,28 @@ def page_auth():
     signup_email_prefill = safe_text(st.query_params.get("signup_email"))
     if auth_view == "signup" and signup_email_prefill:
         st.session_state["landing_signup_email"] = signup_email_prefill
+    google_code = safe_text(st.query_params.get("code"))
+    google_state = safe_text(st.query_params.get("state"))
+    google_error = safe_text(st.query_params.get("error"))
+
+    if auth_view == "google" and (google_code or google_error):
+        if google_error:
+            set_auth_notice("warning", "Google sign-in was cancelled or could not be completed.")
+            clear_google_query_params()
+            st.query_params["auth"] = "signin"
+            st.rerun()
+        try:
+            user = finish_google_sign_in(google_code, google_state)
+            finalize_signed_in_user(user)
+            st.session_state.pop("landing_signup_email", None)
+            clear_google_query_params()
+            st.rerun()
+        except ValueError as exc:
+            set_auth_notice("error", str(exc))
+            clear_google_query_params()
+            st.query_params["auth"] = "signin"
+            st.rerun()
+
     st.markdown(
         """
         <style>
@@ -4228,6 +4464,43 @@ def page_auth():
             margin-top: 1.1rem;
             scroll-margin-top: 1rem;
         }
+        .google-auth-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 3.25rem;
+            margin: 0.15rem 0 0.9rem 0;
+            border-radius: 0.95rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(255, 255, 255, 0.98);
+            color: #0f172a !important;
+            font-weight: 700;
+            text-decoration: none !important;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+        }
+        .google-auth-button:hover {
+            background: #f8fbff;
+            border-color: rgba(96, 165, 250, 0.35);
+        }
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            margin: 0.15rem 0 1rem 0;
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+        .auth-divider::before,
+        .auth-divider::after {
+            content: "";
+            flex: 1 1 auto;
+            height: 1px;
+            background: rgba(148, 163, 184, 0.2);
+        }
+        .auth-divider span {
+            white-space: nowrap;
+        }
         .landing-auth-title {
             font-size: 1.45rem;
             font-weight: 850;
@@ -4356,6 +4629,7 @@ def page_auth():
     if reset_token:
         left, right = st.columns([1.02, 1.18], gap="large")
         with left:
+            render_auth_notice()
             st.markdown(f'<div class="landing-title" style="font-size:2.8rem; max-width:10ch;">Reset your password</div>', unsafe_allow_html=True)
             st.markdown('<div class="landing-subtitle">Use the secure link from your email to set a new password and get back into your account.</div>', unsafe_allow_html=True)
             st.markdown('<div class="landing-auth-shell">', unsafe_allow_html=True)
@@ -4377,6 +4651,7 @@ def page_auth():
         )
         left, right = st.columns([0.98, 1.12], gap="large")
         with left:
+            render_auth_notice()
             page_title = "Create your account" if auth_view == "signup" else "Sign in to your account"
             page_copy = (
                 "Use your email to set up your account and start building a cleaner market view."
