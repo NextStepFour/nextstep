@@ -3096,6 +3096,62 @@ def page_href(page_label):
     return f"?page={quote(page_slug(page_label))}"
 
 
+def clear_service_action_query_params():
+    for key in ["service_action", "service_id"]:
+        try:
+            if key in st.query_params:
+                del st.query_params[key]
+        except Exception:
+            pass
+
+
+def service_action_href(service_id, action):
+    return f"{page_href('Service Profiles')}&service_action={quote(str(action))}&service_id={int(service_id)}"
+
+
+def service_action_icon_svg(icon_name):
+    icons = {
+        "edit": (
+            '<svg viewBox="0 0 24 24" aria-hidden="true">'
+            '<path d="M4 20l4.4-1.1L18.7 8.6a1.6 1.6 0 0 0 0-2.3l-1-1a1.6 1.6 0 0 0-2.3 0L5.1 15.6 4 20Z" '
+            'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>'
+            '<path d="M13.9 6.9l3.2 3.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>'
+            "</svg>"
+        ),
+        "delete": (
+            '<svg viewBox="0 0 24 24" aria-hidden="true">'
+            '<path d="M4 7h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>'
+            '<path d="M9 4h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>'
+            '<path d="M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>'
+            '<path d="M10 11v5M14 11v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>'
+            "</svg>"
+        ),
+        "up": (
+            '<svg viewBox="0 0 24 24" aria-hidden="true">'
+            '<path d="M12 18V6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"></path>'
+            '<path d="M7.5 10.5 12 6l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path>'
+            "</svg>"
+        ),
+        "down": (
+            '<svg viewBox="0 0 24 24" aria-hidden="true">'
+            '<path d="M12 6v12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"></path>'
+            '<path d="M7.5 13.5 12 18l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path>'
+            "</svg>"
+        ),
+    }
+    return icons.get(icon_name, "")
+
+
+def service_action_link(service_id, action, icon_name, label, danger=False):
+    danger_class = " danger" if danger else ""
+    return (
+        f'<a class="service-icon-btn{danger_class}" href="{escape(service_action_href(service_id, action))}" '
+        f'target="_self" aria-label="{escape(label)}" title="{escape(label)}">'
+        f"{service_action_icon_svg(icon_name)}"
+        "</a>"
+    )
+
+
 def resolve_app_page(nav_options):
     slug_map = {page_slug(option): option for option in nav_options}
     pending_nav_page = st.session_state.pop("_pending_nav_page", None)
@@ -5775,6 +5831,30 @@ def page_dashboard():
 
 def page_services():
     st.title("Service Profiles")
+    service_action = safe_text(st.query_params.get("service_action")).strip().lower()
+    service_action_id = safe_text(st.query_params.get("service_id")).strip()
+    if service_action and service_action_id:
+        try:
+            action_service_id = int(service_action_id)
+        except ValueError:
+            action_service_id = None
+        if action_service_id:
+            if service_action == "edit":
+                st.session_state["service_rename_id"] = action_service_id
+                st.session_state["service_focus_id"] = action_service_id
+                st.session_state.pop("service_delete_id", None)
+            elif service_action == "delete":
+                st.session_state["service_delete_id"] = action_service_id
+                st.session_state["service_focus_id"] = action_service_id
+                st.session_state.pop("service_rename_id", None)
+            elif service_action == "up":
+                move_service_within_category(action_service_id, "up")
+                st.session_state["service_focus_id"] = action_service_id
+            elif service_action == "down":
+                move_service_within_category(action_service_id, "down")
+                st.session_state["service_focus_id"] = action_service_id
+        clear_service_action_query_params()
+        st.rerun()
     if st.session_state.pop("_reset_service_form", False):
         st.session_state["service_category_input"] = ""
         st.session_state["service_name_input"] = ""
@@ -5860,11 +5940,52 @@ def page_services():
                 border-radius: 0.9rem;
                 background: rgba(15, 23, 42, 0.34);
                 padding: 0.8rem 0.85rem;
+                position: relative;
             }
             .service-quick-tile.active {
                 border-color: var(--brand-blue);
                 background: rgba(96, 165, 250, 0.10);
                 box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.20) inset;
+            }
+            .service-tile-actions {
+                position: absolute;
+                top: 0.45rem;
+                right: 0.5rem;
+                display: flex;
+                align-items: center;
+                gap: 0.18rem;
+                z-index: 2;
+            }
+            .service-icon-btn {
+                width: 1.42rem;
+                height: 1.42rem;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 0.42rem;
+                border: 1px solid transparent;
+                background: transparent;
+                color: #7f8faa !important;
+                text-decoration: none !important;
+                transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
+                opacity: 0.68;
+            }
+            .service-icon-btn svg {
+                width: 0.72rem;
+                height: 0.72rem;
+                display: block;
+            }
+            .service-icon-btn:hover {
+                background: rgba(96, 165, 250, 0.09);
+                border-color: rgba(96, 165, 250, 0.18);
+                color: #dbeafe !important;
+                opacity: 1;
+                transform: translateY(-1px);
+            }
+            .service-icon-btn.danger:hover {
+                background: rgba(239, 68, 68, 0.09);
+                border-color: rgba(239, 68, 68, 0.18);
+                color: #fecaca !important;
             }
             .service-quick-label {
                 color: #eff6ff;
@@ -5872,6 +5993,7 @@ def page_services():
                 line-height: 1.45;
                 margin-bottom: 0.65rem;
                 word-break: break-word;
+                padding-right: 6rem;
             }
             .service-chip-grid {
                 display: grid;
@@ -5889,6 +6011,7 @@ def page_services():
                 display: flex;
                 flex-direction: column;
                 justify-content: space-between;
+                position: relative;
             }
             .service-chip-tile.active {
                 border-color: var(--brand-blue);
@@ -5902,6 +6025,7 @@ def page_services():
                 line-height: 1.45;
                 margin-bottom: 0.7rem;
                 word-break: break-word;
+                padding-right: 4.2rem;
             }
             .service-chip-meta {
                 color: #cbd5e1;
@@ -5956,14 +6080,24 @@ def page_services():
                 service_number = int(row["service_number"])
                 with quick_columns[quick_idx % 3]:
                     active_class = " active" if focus_id == service_id else ""
+                    quick_actions = (
+                        '<div class="service-tile-actions">'
+                        f'{service_action_link(service_id, "edit", "edit", "Edit service")}'
+                        f'{service_action_link(service_id, "delete", "delete", "Delete service", danger=True)}'
+                        f'{service_action_link(service_id, "up", "up", "Move service up")}'
+                        f'{service_action_link(service_id, "down", "down", "Move service down")}'
+                        '</div>'
+                    )
                     st.markdown(
                         (
                             f'<div class="service-quick-tile{active_class}">'
+                            f"{quick_actions}"
                             f'<div class="service-quick-label">#{service_number} | {escape(safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
                             '</div>'
                         ),
                         unsafe_allow_html=True,
                     )
+                    continue
                     mini1, mini2, mini3 = st.columns(3)
                     if mini1.button("Edit", key=f"quick_edit_{service_id}", use_container_width=True):
                         st.session_state["service_rename_id"] = service_id
@@ -5993,9 +6127,16 @@ def page_services():
 
                 with tile_columns[idx % 3]:
                     active_class = " active" if focus_id == service_id else ""
+                    card_actions = (
+                        '<div class="service-tile-actions">'
+                        f'{service_action_link(service_id, "edit", "edit", "Edit service")}'
+                        f'{service_action_link(service_id, "delete", "delete", "Delete service", danger=True)}'
+                        '</div>'
+                    )
                     st.markdown(
                         (
                             f'<div class="service-chip-tile{active_class}">'
+                            f"{card_actions}"
                             f'<div class="service-chip-label">#{service_number} | {escape(safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
                             f'<div class="service-chip-description">{escape(description_preview or "No description available.")}</div>'
                             '<div class="service-chip-meta">'
@@ -6006,18 +6147,6 @@ def page_services():
                         ),
                         unsafe_allow_html=True,
                     )
-
-                    action_col1, action_col2 = st.columns(2)
-                    if action_col1.button("Edit Service", key=f"edit_service_{service_id}", type="primary", use_container_width=True):
-                        st.session_state["service_rename_id"] = service_id
-                        st.session_state["service_focus_id"] = service_id
-                        st.session_state.pop("service_delete_id", None)
-                        st.rerun()
-                    if action_col2.button("Delete", key=f"delete_service_{service_id}", type="primary", use_container_width=True):
-                        st.session_state["service_delete_id"] = service_id
-                        st.session_state["service_focus_id"] = service_id
-                        st.session_state.pop("service_rename_id", None)
-                        st.rerun()
 
                     if rename_id == service_id:
                         with st.form(f"rename_service_form_{service_id}"):
