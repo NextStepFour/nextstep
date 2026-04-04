@@ -5739,33 +5739,38 @@ def page_services():
                 max-width: 1120px;
                 margin: 0 auto;
             }
-            .service-map-intro {
-                color: #cbd5e1;
-                margin: 0.2rem 0 1rem 0;
-                line-height: 1.55;
+            .service-map-kicker {
+                color: #7f8faa;
+                font-size: 0.78rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                margin: 0.15rem 0 0.7rem 0;
             }
             .service-category-header {
-                margin: 0.4rem 0 0.9rem 0;
-                padding: 0.9rem 1rem;
-                border: 1px solid rgba(255,255,255,0.08);
-                border-radius: 0.95rem;
-                background: rgba(15, 23, 42, 0.34);
+                display: flex;
+                align-items: center;
+                gap: 0.8rem;
+                margin: 0.3rem 0 0.7rem 0;
+                padding: 0;
             }
             .service-category-title {
-                font-size: 1.08rem;
-                font-weight: 800;
+                font-size: 0.98rem;
+                font-weight: 750;
                 color: #eff6ff;
-                margin-bottom: 0.2rem;
+                line-height: 1.25;
+                white-space: nowrap;
             }
-            .service-category-subtitle {
-                color: #cbd5e1;
-                line-height: 1.45;
+            .service-category-line {
+                flex: 1 1 auto;
+                height: 1px;
+                background: rgba(148, 163, 184, 0.18);
             }
             .service-quick-grid {
                 display: grid;
                 grid-template-columns: repeat(3, minmax(0, 1fr));
                 gap: 0.8rem;
-                margin-bottom: 1.05rem;
+                margin-bottom: 0.9rem;
             }
             .service-quick-tile {
                 border: 1px solid rgba(255,255,255,0.08);
@@ -5844,11 +5849,7 @@ def page_services():
             unsafe_allow_html=True,
         )
         st.markdown('<div class="service-map-wrap">', unsafe_allow_html=True)
-        st.markdown("**Saved Service Map**")
-        st.markdown(
-            '<div class="service-map-intro">Services are shown in the order they were created so you can track your service library and its later variations over time.</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="service-map-kicker">Saved services</div>', unsafe_allow_html=True)
 
         svc = prepare_service_map_df(svc)
 
@@ -5860,7 +5861,7 @@ def page_services():
                 (
                     '<div class="service-category-header">'
                     f'<div class="service-category-title">{escape(safe_text(category_name, DEFAULT_SERVICE_CATEGORY))}</div>'
-                    f'<div class="service-category-subtitle">{len(category_df)} service{"s" if len(category_df) != 1 else ""} in this category.</div>'
+                    '<div class="service-category-line"></div>'
                     '</div>'
                 ),
                 unsafe_allow_html=True,
