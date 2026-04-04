@@ -935,9 +935,9 @@ def render_landing_feature_band(title, copy, bullets, kind, tone="soft"):
     )
 
 
-PROMPT_TEMPLATE = """You are a market intelligence engine for solar service sales.
+PROMPT_TEMPLATE = """You are a market intelligence engine for service sales.
 
-Your task is to search the public web for U.S. solar job postings, recently filled roles, RFPs, and similar opportunities from the last {{TIME_WINDOW}} that overlap with the service description below.
+Your task is to search the public web for U.S. job postings, recently filled roles, procurement notices, RFPs, and similar buyer-demand signals from the last {{TIME_WINDOW}} that overlap with the service description below.
 
 Search broadly across public websites, structured company careers pages, ATS-hosted job pages, major public job boards, and RFP/procurement pages.
 
@@ -985,13 +985,15 @@ Rules:
 - Include only public web results you actually found
 - Include only U.S. results
 - Include only results that appear to be from the last {{TIME_WINDOW}}
+- Follow the service description literally and derive industry, buyer type, and role-title ideas from that description
+- Do not assume the service relates to solar, energy, engineering, construction, or any other industry unless the service description clearly supports it
 - Prefer official company career pages and structured ATS/job board pages over reposts or weak aggregators
 - Prioritize results in the target geography when possible
 - opportunity_status must be one of: Open, Filled, Unknown
 - match_score must be 0 to 100
 - match_type must be one of: Direct, Peripheral, Weak, None
 - Direct = the posting clearly describes work that overlaps strongly with the service
-- Peripheral = adjacent responsibilities suggest potential need
+- Peripheral = adjacent responsibilities suggest potential need close to the service description
 - Weak = minor overlap only
 - None = no meaningful overlap
 - why_it_matches must be a list
@@ -1106,14 +1108,14 @@ SERVICE_DESCRIPTION_ENHANCE_SCHEMA = {
 }
 
 
-EXPANSION_PROMPT_TEMPLATE = """You are a market intelligence engine for solar service sales strategy.
+EXPANSION_PROMPT_TEMPLATE = """You are a market intelligence engine for service expansion strategy.
 
 Your task is to review a client's current service coverage and recent market evidence, then identify service gaps the market appears to be requesting that are not explicitly covered by the current service set.
 
 Current service profiles:
 {{CURRENT_SERVICES}}
 
-Market evidence from recent U.S. solar jobs, filled roles, RFPs, and similar opportunities:
+Market evidence from recent U.S. jobs, filled roles, procurement notices, RFPs, and similar opportunities:
 {{MARKET_EVIDENCE}}
 
 Return valid JSON only using this schema:
@@ -1135,8 +1137,9 @@ Rules:
 - Suggest services that are adjacent or related to the current service set
 - Do not repeat services already explicitly covered
 - Base suggestions only on evidence shown in the market evidence
+- Derive the industry and domain from the evidence itself; do not assume solar, energy, engineering, or any other sector unless the evidence clearly supports it
 - Name each suggested service based on the overall hiring pattern across the supporting signals, not just one repeated keyword
-- Only use a narrow term like repowering, SCADA, commissioning, controls, QAQC, or grid integration in the suggested service title when that term is clearly supported by multiple postings or repeated responsibility language
+- Only use a narrow domain term in the suggested service title when that term is clearly supported by multiple postings or repeated responsibility language
 - If the evidence is broader or mixed, prefer a more general title that reflects the real pattern of work being requested
 - Do not force all suggested service titles into the same wording pattern
 - supporting_signal_count must be an integer
@@ -1188,6 +1191,7 @@ Rules:
 - Search the internet first before answering
 - Only include public web results you actually found
 - Only include results from the same company
+- Follow the matched services and known posting hints; do not assume any industry unless the evidence supports it
 - Only include U.S. results
 - Only include results that appear to be from the last 3 months
 - Include up to 12 results when available
@@ -2586,9 +2590,9 @@ def build_prompt(description, location_filter, time_window, high_volume_mode):
     )
     prompt = prompt.replace(
         "{{RELEVANCE_RULE}}",
-        "Include strongly relevant results, plus adjacent or partially overlapping results that could still indicate a likely buyer need."
+        "Include strongly relevant results, plus adjacent or partially overlapping results that could still indicate a likely buyer need. Derive likely buyer roles, employer types, and titles from the service description itself."
         if high_volume_mode
-        else "Only include results that are clearly relevant to the service description.",
+        else "Only include results that are clearly relevant to the service description. Do not infer an unrelated industry or role family.",
     )
     prompt = prompt.replace(
         "{{VOLUME_RULE}}",
@@ -2605,14 +2609,14 @@ def search_variants(service_row, high_volume_mode):
     variants = [
         base_description,
         (
-            f"{service_name}\n\nFocus on official employer career pages, structured ATS-hosted job pages, and other public structured posting sources tied to this service."
+            f"{service_name}\n\nFocus on official employer career pages, structured ATS-hosted job pages, and other public structured posting sources tied to this service. Derive industry and job-title variants from this service only."
             if service_name
-            else f"{base_description}\n\nFocus on official employer career pages, structured ATS-hosted job pages, and other public structured posting sources."
+            else f"{base_description}\n\nFocus on official employer career pages, structured ATS-hosted job pages, and other public structured posting sources. Derive industry and job-title variants from this service only."
         ),
     ]
     if high_volume_mode:
         variants.append(
-            f"{service_name}\n\nExpand recall using public structured job board pages such as LinkedIn, Indeed, Glassdoor, Built In, and official ATS/careers pages. Derive role-title variants and adjacent responsibilities only from this service description."
+            f"{service_name}\n\nExpand recall using public structured job board pages such as LinkedIn, Indeed, Glassdoor, Built In, and official ATS/careers pages. Derive role-title variants and adjacent responsibilities only from this service description. Do not default to energy, engineering, or construction unless the service explicitly points there."
         )
     return variants
 
@@ -5664,7 +5668,7 @@ def page_services():
     if pending_enhanced_description is not None:
         st.session_state["service_description_input"] = pending_enhanced_description
 
-    category = st.text_input("Service Category", placeholder="Solar, Energy Storage, EV Charging", key="service_category_input")
+    category = st.text_input("Service Category", placeholder="Education, Healthcare, Landscaping", key="service_category_input")
     name = st.text_input("Service", key="service_name_input")
     description = st.text_area(
         "Service description",
