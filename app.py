@@ -190,12 +190,70 @@ def inject_global_styles():
             --brand-blue-soft: rgba(96, 165, 250, 0.14);
             --brand-border: rgba(96, 165, 250, 0.35);
             --panel-border: rgba(255, 255, 255, 0.08);
+            --app-bg: #0f1117;
+            --app-surface: #141924;
+            --app-surface-soft: #1a2030;
+            --app-input: #232631;
+            --app-text: #e5eefb;
+            --app-text-soft: #d6e2f5;
+        }
+        html,
+        body,
+        [data-theme="light"],
+        [data-theme="dark"] {
+            background: var(--app-bg) !important;
+            color: var(--app-text) !important;
+            color-scheme: dark !important;
+        }
+        [data-testid="stApp"],
+        .stApp,
+        [data-testid="stAppViewContainer"],
+        [data-testid="stMain"],
+        section[data-testid="stMain"] {
+            background: var(--app-bg) !important;
+            color: var(--app-text) !important;
         }
         [data-testid="stAppViewBlockContainer"] {
             padding-top: 0 !important;
+            background: transparent !important;
+        }
+        [data-testid="stMainBlockContainer"],
+        [data-testid="stBottomBlockContainer"],
+        .main .block-container {
+            background: transparent !important;
+            color: #e5eefb !important;
+        }
+        .stMarkdown,
+        .stText,
+        .stCaption,
+        .stAlert,
+        .stInfo,
+        .stSuccess,
+        .stWarning,
+        .stError,
+        .stTabs,
+        .stExpander,
+        .stSelectbox,
+        .stMultiSelect,
+        .stCode,
+        .stDataFrame,
+        .stTable,
+        .stJson {
+            color: var(--app-text) !important;
         }
         .stApp h1, .stApp h2, .stApp h3 {
             color: #dbeafe;
+        }
+        .stApp h4, .stApp h5, .stApp h6,
+        .stApp p, .stApp li, .stApp span, .stApp label, .stApp small {
+            color: var(--app-text-soft);
+        }
+        [data-testid="stMarkdownContainer"] *,
+        [data-testid="stMetricValue"],
+        [data-testid="stMetricLabel"],
+        [data-testid="stWidgetLabel"],
+        [data-testid="stCaptionContainer"] * {
+            color: var(--app-text) !important;
         }
         .stApp a {
             color: var(--brand-blue);
@@ -232,6 +290,14 @@ def inject_global_styles():
         [data-baseweb="tab"] {
             border-radius: 0.65rem 0.65rem 0 0;
         }
+        [data-baseweb="tab-panel"],
+        [data-testid="stVerticalBlockBorderWrapper"],
+        [data-testid="stExpander"],
+        details,
+        [data-testid="stForm"] {
+            background: transparent !important;
+            color: var(--app-text) !important;
+        }
         [data-baseweb="tab"][aria-selected="true"] {
             color: var(--brand-blue) !important;
             border-bottom-color: var(--brand-blue) !important;
@@ -239,15 +305,102 @@ def inject_global_styles():
         [data-baseweb="select"] > div,
         .stTextInput > div > div > input,
         .stTextArea textarea,
-        .stNumberInput input {
-            border-color: var(--panel-border);
+        .stNumberInput input,
+        .stDateInput input,
+        [data-baseweb="base-input"] input,
+        [data-baseweb="base-input"] textarea {
+            background: var(--app-input) !important;
+            color: #eff6ff !important;
+            border-color: var(--panel-border) !important;
             border-radius: 0.75rem;
+            caret-color: #eff6ff !important;
+            box-shadow: none !important;
+        }
+        [data-baseweb="select"] > div,
+        [data-baseweb="select"] input,
+        [data-baseweb="select"] span,
+        [data-baseweb="popover"],
+        [data-baseweb="menu"],
+        [role="listbox"],
+        [role="option"],
+        [role="dialog"] {
+            background: var(--app-input) !important;
+            color: #eff6ff !important;
+        }
+        [data-baseweb="popover"],
+        [data-baseweb="menu"],
+        [role="listbox"],
+        [role="dialog"] {
+            border: 1px solid var(--panel-border) !important;
+        }
+        [data-baseweb="select"] > div:hover,
+        .stTextInput > div > div > input:hover,
+        .stTextArea textarea:hover,
+        .stNumberInput input:hover,
+        .stDateInput input:hover {
+            border-color: var(--brand-border) !important;
+        }
+        [data-baseweb="select"] > div:focus-within,
+        .stTextInput > div > div > input:focus,
+        .stTextArea textarea:focus,
+        .stNumberInput input:focus,
+        .stDateInput input:focus {
+            border-color: var(--brand-blue) !important;
+            box-shadow: 0 0 0 1px var(--brand-blue) !important;
+        }
+        input::placeholder,
+        textarea::placeholder {
+            color: #9fb0cc !important;
+            opacity: 1 !important;
+        }
+        [data-baseweb="select"] svg,
+        .stCheckbox svg,
+        .stRadio svg {
+            fill: #dbeafe !important;
+            color: #dbeafe !important;
+        }
+        .stCheckbox label,
+        .stRadio label {
+            color: var(--app-text) !important;
+        }
+        [data-baseweb="tab-list"] button,
+        [data-baseweb="tab"] {
+            background: transparent !important;
+            color: #cbd5e1 !important;
         }
         [data-testid="stMetric"] {
             border: 1px solid var(--panel-border);
             border-radius: 0.95rem;
             padding: 0.9rem 1rem;
             background: rgba(255, 255, 255, 0.02);
+        }
+        [data-baseweb="tag"] {
+            background: rgba(96, 165, 250, 0.16) !important;
+            color: #dbeafe !important;
+            border: 1px solid rgba(96, 165, 250, 0.28) !important;
+        }
+        .stCode,
+        .stJson,
+        [data-testid="stCodeBlock"] {
+            background: var(--app-surface) !important;
+            color: var(--app-text) !important;
+            border-color: var(--panel-border) !important;
+        }
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"],
+        [data-testid="stStatusWidget"] {
+            background: transparent !important;
+        }
+        [data-testid="stDataFrame"] *,
+        [data-testid="stTable"] * {
+            color: var(--app-text) !important;
+        }
+        [data-testid="stDataFrame"] [role="grid"],
+        [data-testid="stDataFrame"] [role="rowgroup"],
+        [data-testid="stDataFrame"] [role="columnheader"],
+        [data-testid="stDataFrame"] [role="gridcell"] {
+            background: var(--app-surface) !important;
+            border-color: rgba(255,255,255,0.06) !important;
         }
         [data-testid="stSidebar"] h1,
         [data-testid="stSidebar"] h2,
