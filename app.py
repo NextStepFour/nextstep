@@ -476,48 +476,53 @@ def inject_app_chrome_styles():
             gap: 0.48rem;
             margin-bottom: 1rem;
         }
-        .app-nav-link {
-            display: block;
+        .app-nav-link-btn {
             width: 100%;
+            min-height: 2.95rem;
             border-radius: 0.9rem;
             padding: 0.7rem 0.85rem;
-            border: 1px solid rgba(148, 163, 184, 0.18);
-            background: #ffffff;
-            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
-            color: #0f172a !important;
-            text-decoration: none !important;
             font-size: 0.98rem;
             font-weight: 600;
             line-height: 1.2;
-            transition: background 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+            margin: 0;
+            text-align: left;
+            cursor: pointer;
         }
-        .app-nav-link:hover {
+        .app-nav-link-btn {
+            background: #ffffff;
+            color: #0f172a;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+        }
+        .app-nav-link-btn:hover {
             background: rgba(96, 165, 250, 0.1);
             border-color: rgba(96, 165, 250, 0.35);
-            color: #0f172a !important;
+            color: #0f172a;
         }
-        .app-nav-link.active {
+        .app-nav-link-btn.active {
             background: #4f7cf0;
             border-color: #4f7cf0;
-            color: #ffffff !important;
+            color: #ffffff;
             box-shadow: 0 10px 22px rgba(79, 124, 240, 0.22);
         }
-        .app-nav-signout {
-            display: block;
+        .app-nav-signout-btn {
             width: 100%;
-            text-align: center;
+            min-height: 2.95rem;
             border-radius: 0.85rem;
             padding: 0.8rem 0.95rem;
-            border: 1px solid rgba(96, 165, 250, 0.35);
             background: transparent;
-            color: #dbeafe !important;
-            text-decoration: none !important;
+            color: #dbeafe;
+            border: 1px solid rgba(96, 165, 250, 0.35);
+            box-shadow: none;
+            cursor: pointer;
+            text-align: center;
+            font-size: 0.98rem;
             font-weight: 650;
         }
-        .app-nav-signout:hover {
+        .app-nav-signout-btn:hover {
             background: rgba(96, 165, 250, 0.14);
             border-color: #60a5fa;
-            color: #eff6ff !important;
+            color: #eff6ff;
         }
         @media (max-width: 960px) {
             .app-nav-rail {
@@ -2606,9 +2611,9 @@ def resolve_app_page(nav_options):
 
 
 def render_app_nav_rail(user, current_page, nav_options):
-    nav_links = "".join(
+    nav_buttons_html = "".join(
         [
-            f'<a class="app-nav-link{" active" if label == current_page else ""}" href="{page_href(label)}">{escape(label)}</a>'
+            f'<button type="button" class="app-nav-link-btn{" active" if label == current_page else ""}" onclick="window.parent.location.search=\'?page={page_slug(label)}\'">{escape(label)}</button>'
             for label in nav_options
         ]
     )
@@ -2625,8 +2630,8 @@ def render_app_nav_rail(user, current_page, nav_options):
             f'<div class="app-nav-mini-item"><div class="app-nav-mini-label">Status</div><div class="app-nav-mini-value">{escape(user.get("subscription_status", "inactive").title())}</div></div>'
             "</div>"
             "</div>"
-            f'<div class="app-nav-links">{nav_links}</div>'
-            '<a class="app-nav-signout" href="?action=signout">Sign Out</a>'
+            f'<div class="app-nav-links">{nav_buttons_html}</div>'
+            '<button type="button" class="app-nav-signout-btn" onclick="window.parent.location.search=\'?action=signout\'">Sign Out</button>'
             "</div>"
         ),
         unsafe_allow_html=True,
