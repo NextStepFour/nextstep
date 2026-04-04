@@ -2061,6 +2061,88 @@ def delete_run(run_id, user_id=None):
         )
 
 
+def update_run_payload(run_id, company_df, evidence_df, user_id=None):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user:
+        raise ValueError("Please sign in to update saved lists.")
+    with conn() as db:
+        db.execute(
+            """
+            UPDATE searches
+            SET company_json = ?, evidence_json = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (
+                ensure_company_columns(company_df).to_json(orient="records"),
+                ensure_evidence_columns(evidence_df).to_json(orient="records"),
+                int(run_id),
+                user["id"],
+            ),
+        )
+
+
+def delete_saved_company_rows(selected_rows_df, user_id=None):
+    user = get_user_by_id(user_id) if user_id else current_user()
+    if not user:
+        raise ValueError("Please sign in to delete saved list rows.")
+    if selected_rows_df is None or selected_rows_df.empty:
+        return {"deleted_rows": 0, "deleted_runs": 0}
+
+    deleted_rows = 0
+    deleted_runs = 0
+
+    for run_id, run_rows in selected_rows_df.groupby("source_run_id", dropna=False):
+        if pd.isna(run_id):
+            continue
+        run_record = get_run(int(run_id), user["id"])
+        if not run_record:
+            continue
+
+        company_df = ensure_company_columns(load_df(run_record["company_json"]))
+        evidence_df = ensure_evidence_columns(load_df(run_record["evidence_json"]))
+        pairs_to_remove = {
+            (
+                safe_text(row.get("buyer_company"), "Unknown Company"),
+                safe_text(row.get("job_posting_title")),
+            )
+            for _, row in run_rows.iterrows()
+        }
+        deleted_rows += len(pairs_to_remove)
+
+        if not evidence_df.empty:
+            keep_mask = evidence_df.apply(
+                lambda row: (
+                    safe_text(row.get("company_name"), "Unknown Company"),
+                    safe_text(row.get("job_title")),
+                )
+                not in pairs_to_remove,
+                axis=1,
+            )
+            evidence_df = evidence_df[keep_mask].reset_index(drop=True)
+
+        if not company_df.empty:
+            keep_company_mask = company_df.apply(
+                lambda row: (
+                    safe_text(row.get("buyer_company"), "Unknown Company"),
+                    safe_text(row.get("job_posting_title")),
+                )
+                not in pairs_to_remove,
+                axis=1,
+            )
+            company_df = company_df[keep_company_mask].reset_index(drop=True)
+
+        if not evidence_df.empty:
+            company_df = aggregate_companies(evidence_df)
+
+        if company_df.empty and evidence_df.empty:
+            delete_run(int(run_id), user["id"])
+            deleted_runs += 1
+        else:
+            update_run_payload(int(run_id), company_df, evidence_df, user["id"])
+
+    return {"deleted_rows": deleted_rows, "deleted_runs": deleted_runs}
+
+
 def save_service(category, name, description, location_filter, user_id=None):
     user = get_user_by_id(user_id) if user_id else current_user()
     if not user:
@@ -4057,13 +4139,14 @@ def build_master_saved_data():
         errors="coerce",
     )
     visible_columns = ["date_generated"] + COMPANY_COLUMNS
-    for column in visible_columns:
+    metadata_columns = ["source_run_id", "source_run_name", "source_run_created_at", "source_services"]
+    for column in visible_columns + metadata_columns:
         if column not in master_company_df.columns:
             master_company_df[column] = None
     return master_company_df.sort_values(
         ["_date_generated_sort", "buyer_company", "job_posting_title"],
         ascending=[False, True, True],
-    ).reset_index(drop=True)[visible_columns]
+    ).reset_index(drop=True).drop(columns=["_date_generated_sort"], errors="ignore")
 
 
 def portal_access_allowed(user):
@@ -6150,7 +6233,35 @@ def page_saved_lists():
         st.info("No buyer company rows match the selected services.")
         return
 
-    st.dataframe(pretty_df(filtered_company_df), use_container_width=True)
+    filtered_company_df = filtered_company_df.reset_index(drop=True)
+    visible_columns = ["date_generated"] + COMPANY_COLUMNS
+    table_event = st.dataframe(
+        pretty_df(filtered_company_df[visible_columns]),
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="multi-row",
+    )
+    selected_rows = list(getattr(getattr(table_event, "selection", None), "rows", []) or [])
+    st.session_state["saved_lists_selected_rows"] = selected_rows
+    if selected_rows:
+        selected_df = filtered_company_df.iloc[selected_rows].copy()
+        delete_cols = st.columns([1.25, 4.75])
+        if delete_cols[0].button(
+            f"Delete selected rows ({len(selected_df)})",
+            type="primary",
+            use_container_width=True,
+            key="delete_selected_saved_list_rows",
+        ):
+            result = delete_saved_company_rows(selected_df)
+            st.session_state["saved_lists_selected_rows"] = []
+            deleted_runs = int(result.get("deleted_runs") or 0)
+            deleted_rows = int(result.get("deleted_rows") or 0)
+            if deleted_runs:
+                st.success(f"Deleted {deleted_rows} saved row{'s' if deleted_rows != 1 else ''}. {deleted_runs} empty saved list{'s' if deleted_runs != 1 else ''} were also removed.")
+            else:
+                st.success(f"Deleted {deleted_rows} saved row{'s' if deleted_rows != 1 else ''}.")
+            st.rerun()
     st.download_button(
         "Download master company list as CSV",
         data=csv_data(filtered_company_df),
