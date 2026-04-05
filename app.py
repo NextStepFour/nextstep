@@ -106,6 +106,9 @@ EVIDENCE_COLUMNS = [
     "why_it_matches",
     "matching_responsibilities",
     "matching_keywords",
+    "education_requirements",
+    "credential_requirements",
+    "licensure_requirements",
     "source_url",
 ]
 COMPANY_COLUMNS = [
@@ -124,6 +127,9 @@ EXPANSION_COLUMNS = [
     "companies_showing_interest",
     "sample_job_titles",
     "sample_responsibilities",
+    "common_education_requirements",
+    "common_credential_requirements",
+    "common_licensure_requirements",
 ]
 DISPLAY_NAME_MAP = {
     "date_generated": "Date Generated",
@@ -145,6 +151,9 @@ DISPLAY_NAME_MAP = {
     "buyer_department": "Buyer Department",
     "matching_responsibilities": "Matching Responsibilities",
     "matching_keywords": "Matching Keywords",
+    "education_requirements": "Education Requirements",
+    "credential_requirements": "Credential Requirements",
+    "licensure_requirements": "Licensure Requirements",
     "source_url": "Source URL",
     "run_name": "Run Name",
     "services_text": "Services",
@@ -169,6 +178,9 @@ DISPLAY_NAME_MAP = {
     "companies_showing_interest": "Companies Showing Interest",
     "sample_job_titles": "Sample Job Titles",
     "sample_responsibilities": "Typical Responsibilities Seen",
+    "common_education_requirements": "Common Education Requirements",
+    "common_credential_requirements": "Common Credential Requirements",
+    "common_licensure_requirements": "Common Licensure Requirements",
     "source_run_id": "Source Run ID",
     "source_run_name": "Source Run Name",
     "source_run_created_at": "Source Run Created At",
@@ -990,6 +1002,9 @@ Return valid JSON only using this schema:
       "why_it_matches": [],
       "matching_responsibilities": [],
       "matching_keywords": [],
+      "education_requirements": [],
+      "credential_requirements": [],
+      "licensure_requirements": [],
       "buyer_department": null,
       "outreach_next_step": null,
       "source_url": null
@@ -1016,6 +1031,9 @@ Rules:
 - why_it_matches must be a list
 - matching_responsibilities must be a list
 - matching_keywords must be a list
+- education_requirements must be a list of explicit degree, field-of-study, or education-level requirements mentioned in the posting
+- credential_requirements must be a list of explicit certifications, credentials, or training requirements mentioned in the posting
+- licensure_requirements must be a list of explicit licenses or formal practice-authority requirements mentioned in the posting
 - buyer_department should reflect the team most likely tied to the hiring signal when supported by the posting
 - base_salary should include only explicit base salary from the posting or source page
 - outreach_next_step should be a short, practical next step based only on the posting and likely buyer department
@@ -1085,6 +1103,9 @@ RESPONSE_SCHEMA = {
                     "why_it_matches": {"type": "array", "items": {"type": "string"}},
                     "matching_responsibilities": {"type": "array", "items": {"type": "string"}},
                     "matching_keywords": {"type": "array", "items": {"type": "string"}},
+                    "education_requirements": {"type": "array", "items": {"type": "string"}},
+                    "credential_requirements": {"type": "array", "items": {"type": "string"}},
+                    "licensure_requirements": {"type": "array", "items": {"type": "string"}},
                     "buyer_department": {"type": ["string", "null"]},
                     "outreach_next_step": {"type": ["string", "null"]},
                     "source_url": {"type": ["string", "null"]},
@@ -1104,6 +1125,9 @@ RESPONSE_SCHEMA = {
                     "why_it_matches",
                     "matching_responsibilities",
                     "matching_keywords",
+                    "education_requirements",
+                    "credential_requirements",
+                    "licensure_requirements",
                     "buyer_department",
                     "outreach_next_step",
                     "source_url",
@@ -1145,7 +1169,10 @@ Return valid JSON only using this schema:
       "connected_current_services": [],
       "companies_showing_interest": [],
       "sample_job_titles": [],
-      "sample_responsibilities": []
+      "sample_responsibilities": [],
+      "common_education_requirements": [],
+      "common_credential_requirements": [],
+      "common_licensure_requirements": []
     }
   ]
 }
@@ -1159,12 +1186,17 @@ Rules:
 - Only use a narrow domain term in the suggested service title when that term is clearly supported by multiple postings or repeated responsibility language
 - If the evidence is broader or mixed, prefer a more general title that reflects the real pattern of work being requested
 - Do not force all suggested service titles into the same wording pattern
+- Use repeated overlap in explicit education, credential, and licensure requirements as a supporting signal when it helps strengthen the match between roles and a suggested expansion
+- Do not suggest an expansion based only on a shared degree or credential; responsibilities and service scope should remain the main driver
 - supporting_signal_count must be an integer
 - service_description should be a short factual description of the suggested service based on repeated job-posting language
 - connected_current_services must be a list of current saved services this suggested expansion most closely connects to
 - companies_showing_interest must be a list of companies whose postings suggest demand for the suggested service
 - sample_job_titles must be a list
 - sample_responsibilities must be a list
+- common_education_requirements must be a list of repeated or meaningful explicit education requirements seen in the supporting postings
+- common_credential_requirements must be a list of repeated or meaningful explicit credential or certification requirements seen in the supporting postings
+- common_licensure_requirements must be a list of repeated or meaningful explicit license requirements seen in the supporting postings
 - Return 3 to 8 expansion ideas when possible
 - Return JSON only"""
 
@@ -1237,6 +1269,9 @@ EXPANSION_SCHEMA = {
                     "companies_showing_interest": {"type": "array", "items": {"type": "string"}},
                     "sample_job_titles": {"type": "array", "items": {"type": "string"}},
                     "sample_responsibilities": {"type": "array", "items": {"type": "string"}},
+                    "common_education_requirements": {"type": "array", "items": {"type": "string"}},
+                    "common_credential_requirements": {"type": "array", "items": {"type": "string"}},
+                    "common_licensure_requirements": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": [
                     "suggested_service",
@@ -1246,6 +1281,9 @@ EXPANSION_SCHEMA = {
                     "companies_showing_interest",
                     "sample_job_titles",
                     "sample_responsibilities",
+                    "common_education_requirements",
+                    "common_credential_requirements",
+                    "common_licensure_requirements",
                 ],
             },
         }
@@ -2311,6 +2349,14 @@ def build_service_option_map(svc_df):
     }
 
 
+def service_map_label(row):
+    return (
+        f"#{int(row['service_number'])} | "
+        f"{safe_text(row.get('service_category'), DEFAULT_SERVICE_CATEGORY)} | "
+        f"{safe_text(row['service_name'], 'Untitled Service')}"
+    )
+
+
 def prepare_service_map_df(svc_df):
     if svc_df.empty:
         return pd.DataFrame()
@@ -2350,6 +2396,125 @@ def service_category_picker_options(svc_df, current_value=""):
         categories.append(cleaned_current)
     non_default_categories = [category for category in categories if category != DEFAULT_SERVICE_CATEGORY]
     return [SERVICE_CATEGORY_ADD_OPTION, SERVICE_CATEGORY_DEFAULT_OPTION] + non_default_categories
+
+
+def toggle_service_category_selection(category_key, child_keys):
+    category_selected = bool(st.session_state.get(category_key, False))
+    for child_key in child_keys:
+        st.session_state[child_key] = category_selected
+
+
+def sync_service_category_selection(category_key, child_keys):
+    child_states = [bool(st.session_state.get(child_key, False)) for child_key in child_keys]
+    st.session_state[category_key] = bool(child_states) and all(child_states)
+
+
+def render_grouped_service_selector(svc_df, state_prefix, heading, helper_text=None):
+    working = prepare_service_map_df(svc_df)
+    if working.empty:
+        return [], {}
+
+    st.markdown(
+        """
+        <style>
+        .grouped-service-selector-wrap {
+            max-width: 1080px;
+            margin: 0 auto 1rem auto;
+        }
+        .grouped-service-selector-heading {
+            font-size: 0.95rem;
+            font-weight: 750;
+            color: #eff6ff;
+            margin-bottom: 0.2rem;
+        }
+        .grouped-service-selector-helper {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            line-height: 1.45;
+            margin-bottom: 0.65rem;
+        }
+        .grouped-service-selector-shell {
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 0.95rem;
+            background: rgba(15, 23, 42, 0.34);
+            padding: 0.8rem 0.9rem 0.55rem 0.9rem;
+        }
+        .grouped-service-selector-section {
+            padding-bottom: 0.35rem;
+            margin-bottom: 0.45rem;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        }
+        .grouped-service-selector-section:last-child {
+            border-bottom: 0;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .grouped-service-selector-meta {
+            color: #7f8faa;
+            font-size: 0.8rem;
+            margin: -0.15rem 0 0.35rem 2rem;
+            line-height: 1.35;
+        }
+        .grouped-service-selector-child {
+            margin-left: 1.25rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(f'<div class="grouped-service-selector-heading">{escape(heading)}</div>', unsafe_allow_html=True)
+    if helper_text:
+        st.markdown(f'<div class="grouped-service-selector-helper">{escape(helper_text)}</div>', unsafe_allow_html=True)
+
+    options = build_service_option_map(working)
+    labels_by_id = {int(row["id"]): service_map_label(row) for _, row in working.iterrows()}
+
+    with st.container(border=True):
+        for category_index, (category_name, category_df) in enumerate(working.groupby("service_category", sort=False)):
+            service_ids = [int(row["id"]) for _, row in category_df.iterrows()]
+            child_keys = [f"{state_prefix}_service_{service_id}" for service_id in service_ids]
+            category_key = f"{state_prefix}_category_{page_slug(category_name)}"
+            for child_key in child_keys:
+                if child_key not in st.session_state:
+                    st.session_state[child_key] = False
+            if category_key not in st.session_state:
+                st.session_state[category_key] = bool(child_keys) and all(bool(st.session_state.get(child_key, False)) for child_key in child_keys)
+
+            selected_count = sum(bool(st.session_state.get(child_key, False)) for child_key in child_keys)
+            st.checkbox(
+                f"{safe_text(category_name, DEFAULT_SERVICE_CATEGORY)}",
+                key=category_key,
+                on_change=toggle_service_category_selection,
+                args=(category_key, child_keys),
+            )
+            st.markdown(
+                f'<div class="grouped-service-selector-meta">{selected_count}/{len(child_keys)} selected</div>',
+                unsafe_allow_html=True,
+            )
+            for _, row in category_df.iterrows():
+                service_id = int(row["id"])
+                child_key = f"{state_prefix}_service_{service_id}"
+                indent_col, service_col = st.columns([0.045, 0.955], gap="small")
+                with service_col:
+                    st.checkbox(
+                        service_map_label(row),
+                        key=child_key,
+                        on_change=sync_service_category_selection,
+                        args=(category_key, child_keys),
+                    )
+            if category_index < working["service_category"].nunique() - 1:
+                st.markdown(
+                    '<div style="height:1px; background:rgba(148, 163, 184, 0.12); margin:0.45rem 0 0.55rem 0;"></div>',
+                    unsafe_allow_html=True,
+                )
+
+    selected_labels = [
+        labels_by_id[int(row["id"])]
+        for _, row in working.iterrows()
+        if bool(st.session_state.get(f"{state_prefix}_service_{int(row['id'])}", False))
+    ]
+    return selected_labels, options
 
 
 def save_run(
@@ -2749,6 +2914,16 @@ def normalize_search_record(item, service_name):
     row["company_name"] = row.get("company_name") or "Unknown Company"
     for column in EVIDENCE_COLUMNS:
         row.setdefault(column, None)
+    for column in [
+        "why_it_matches",
+        "matching_responsibilities",
+        "matching_keywords",
+        "education_requirements",
+        "credential_requirements",
+        "licensure_requirements",
+    ]:
+        if row.get(column) is None:
+            row[column] = []
     return row
 
 
@@ -2850,6 +3025,9 @@ def deep_dive_records_to_evidence_df(records_df, matched_services_text):
                 "why_it_matches": [safe_text(row.get("why_it_matters"))] if safe_text(row.get("why_it_matters")) else [],
                 "matching_responsibilities": [],
                 "matching_keywords": [],
+                "education_requirements": [],
+                "credential_requirements": [],
+                "licensure_requirements": [],
                 "buyer_department": None,
                 "outreach_next_step": None,
                 "source_url": safe_text(row.get("source_url")) or None,
@@ -2961,6 +3139,9 @@ def build_expansion_context(selected_services_df, evidence_df):
                 "buyer_department": row["buyer_department"],
                 "matching_responsibilities": row["matching_responsibilities"],
                 "matching_keywords": row["matching_keywords"],
+                "education_requirements": row["education_requirements"],
+                "credential_requirements": row["credential_requirements"],
+                "licensure_requirements": row["licensure_requirements"],
                 "source_url": row["source_url"],
             }
         )
@@ -3107,6 +3288,25 @@ def split_service_values(value):
     for raw_value in normalized_text_values(value):
         items.extend(re.split(r"[;\n]+", raw_value))
     return [item.strip() for item in items if item.strip()]
+
+
+def qualification_summary_parts(education, credentials, licensure):
+    parts = []
+    education_items = flatten_unique([education])
+    credential_items = flatten_unique([credentials])
+    licensure_items = flatten_unique([licensure])
+    if education_items:
+        parts.append(f"Education: {'; '.join(education_items)}")
+    if credential_items:
+        parts.append(f"Credentials: {'; '.join(credential_items)}")
+    if licensure_items:
+        parts.append(f"Licensure: {'; '.join(licensure_items)}")
+    return parts
+
+
+def qualification_summary_text(education, credentials, licensure, default="No qualification signal captured."):
+    parts = qualification_summary_parts(education, credentials, licensure)
+    return " | ".join(parts) if parts else default
 
 
 def queue_navigation(target_page):
@@ -3304,10 +3504,16 @@ def format_lists_for_display(df):
         "why_it_matches",
         "matching_responsibilities",
         "matching_keywords",
+        "education_requirements",
+        "credential_requirements",
+        "licensure_requirements",
         "connected_current_services",
         "companies_showing_interest",
         "sample_job_titles",
         "sample_responsibilities",
+        "common_education_requirements",
+        "common_credential_requirements",
+        "common_licensure_requirements",
     ]:
         if column in display.columns:
             display[column] = display[column].apply(lambda value: "; ".join(value) if isinstance(value, list) else value)
@@ -3404,6 +3610,9 @@ def build_expansion_company_views(expansion_row, evidence_df):
         expansion_row.get("suggested_service"),
         expansion_row.get("service_description"),
         expansion_row.get("sample_responsibilities"),
+        expansion_row.get("common_education_requirements"),
+        expansion_row.get("common_credential_requirements"),
+        expansion_row.get("common_licensure_requirements"),
     )
 
     company_views = []
@@ -3421,6 +3630,9 @@ def build_expansion_company_views(expansion_row, evidence_df):
                 row.get("likely_service_need"),
                 row.get("matching_keywords"),
                 row.get("matching_responsibilities"),
+                row.get("education_requirements"),
+                row.get("credential_requirements"),
+                row.get("licensure_requirements"),
             )
             title_match = 1 if safe_text(title) in sample_titles else 0
             token_overlap = len(row_tokens & (title_tokens | expansion_tokens))
@@ -3573,6 +3785,12 @@ def render_potential_expansions_report(
             margin-bottom: 0.32rem;
             padding-left: 0.15rem;
         }
+        .expansion-job-subline {
+            color: #a5b4cc;
+            font-size: 0.86rem;
+            line-height: 1.5;
+            margin: -0.1rem 0 0.38rem 0.95rem;
+        }
         @media (max-width: 900px) {
             .expansion-summary-grid {
                 grid-template-columns: 1fr 1fr;
@@ -3660,11 +3878,21 @@ def render_potential_expansions_report(
                     job_title = escape(safe_text(job.get("job_title"), "Unknown job title"))
                     salary = safe_text(job.get("base_salary"))
                     posted = safe_text(job.get("posted_date"), "Unknown")
+                    qualification_text = qualification_summary_text(
+                        job.get("education_requirements"),
+                        job.get("credential_requirements"),
+                        job.get("licensure_requirements"),
+                        default="",
+                    )
                     job_line = f"{job_title}"
                     if salary:
                         job_line += f" | {escape(salary)}"
                     job_line += f" | {escape(posted)}"
                     job_lines.append(f'<div class="expansion-job-line">- {job_line}</div>')
+                    if qualification_text:
+                        job_lines.append(
+                            f'<div class="expansion-job-subline">{escape(qualification_text)}</div>'
+                        )
                 company_cards_html.append(
                     '<div class="expansion-company-box">'
                     f'<div class="expansion-company-title">{escape(company_view["company_name"])}</div>'
@@ -3678,6 +3906,7 @@ def render_potential_expansions_report(
                     '<div class="expansion-card">'
                     f'<div class="expansion-card-title">{escape(safe_text(row["suggested_service"], "Unknown expansion"))}</div>'
                     f'<div class="expansion-card-section"><div class="expansion-card-label">Service Description</div><div class="expansion-card-value">{escape(safe_text(row["service_description"], "No service description captured."))}</div></div>'
+                    f'<div class="expansion-card-section"><div class="expansion-card-label">Common Qualifications Seen</div><div class="expansion-card-value">{escape(qualification_summary_text(row.get("common_education_requirements"), row.get("common_credential_requirements"), row.get("common_licensure_requirements")))}</div></div>'
                     f'<div class="expansion-card-section"><div class="expansion-card-label">Companies Showing Interest</div><div class="expansion-card-value">{escape(safe_text(row["companies_showing_interest"], "No companies captured."))}</div></div>'
                     f'<div class="expansion-card-section"><div class="expansion-card-label">Pattern By Company</div><div class="expansion-card-value">{"".join(company_cards_html) if company_cards_html else "No company-specific posting pattern could be mapped from the current evidence."}</div></div>'
                     f'<div class="expansion-card-section"><div class="expansion-card-label">Typical Job Titles / Responsibilities Seen</div><div class="expansion-card-value"><strong>Job Titles:</strong> {escape(safe_text(row["sample_job_titles"], "No job titles captured."))}<br><strong>Responsibilities:</strong> {escape(safe_text(row["sample_responsibilities"], "No responsibilities captured."))}</div></div>'
@@ -4138,6 +4367,12 @@ def expansion_pdf_data(expansion_df, meta):
                 Paragraph(escape(f"Service description: {row['service_description'] or 'Unknown'}"), styles["Normal"]),
                 Paragraph(escape(f"Frequency: {row['supporting_signal_count']}"), styles["Normal"]),
                 Paragraph(escape(f"Connected current services: {row['connected_current_services']}"), styles["Normal"]),
+                Paragraph(
+                    escape(
+                        f"Common qualifications seen: {qualification_summary_text(row.get('common_education_requirements'), row.get('common_credential_requirements'), row.get('common_licensure_requirements'))}"
+                    ),
+                    styles["Normal"],
+                ),
                 Paragraph(escape(f"Companies showing interest: {row['companies_showing_interest']}"), styles["Normal"]),
                 Paragraph(escape(f"Typical job titles seen: {row['sample_job_titles']}"), styles["Normal"]),
                 Paragraph(escape(f"Typical responsibilities seen: {row['sample_responsibilities']}"), styles["Normal"]),
@@ -6307,8 +6542,12 @@ def page_generate():
         st.info("Create a service profile first.")
         return
 
-    options = build_service_option_map(svc)
-    selected = st.multiselect("Select saved services", list(options.keys()))
+    selected, options = render_grouped_service_selector(
+        svc,
+        "generate_picker",
+        "Select categories or individual services",
+        "Choose a category to select every service inside it, then adjust individual services below if needed.",
+    )
     location_filter = st.text_input("Location filter", value="Any U.S. location")
     time_window = st.selectbox("Time window", TIME_OPTIONS, index=2)
     high_volume = st.checkbox("High volume mode (broader search, more opportunities, lower precision)", value=True)
@@ -6899,8 +7138,12 @@ def page_potential_expansions():
         return
 
     svc = prepare_service_map_df(svc)
-    options = build_service_option_map(svc)
-    selected = st.multiselect("Select 3 or more services", list(options.keys()))
+    selected, options = render_grouped_service_selector(
+        svc,
+        "expansion_picker",
+        "Select categories or services",
+        "Choose a category to include all of its services, then uncheck any individual services you do not want in this expansion analysis.",
+    )
     if selected:
         st.markdown(
             """
