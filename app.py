@@ -663,6 +663,9 @@ def inject_app_chrome_styles():
             gap: 0.18rem;
             margin-bottom: 1.2rem;
         }
+        .app-nav-account-links {
+            margin-bottom: 0.85rem;
+        }
         .app-nav-link-btn {
             display: block;
             width: 100%;
@@ -693,6 +696,9 @@ def inject_app_chrome_styles():
             border-color: #4f7cf0;
             color: #ffffff;
             box-shadow: 0 10px 22px rgba(79, 124, 240, 0.22);
+        }
+        .app-nav-account-link {
+            color: #9fb0c6;
         }
         .app-nav-signout-btn {
             display: block;
@@ -3481,10 +3487,19 @@ def resolve_app_page(nav_options):
 
 
 def render_app_nav_rail(user, current_page, nav_options):
+    workflow_pages = [label for label in nav_options if label not in {"Plans & Billing", "Users"}]
+    account_pages = [label for label in nav_options if label in {"Plans & Billing", "Users"}]
+
     nav_buttons_html = "".join(
         [
             f'<a class="app-nav-link-btn{" active" if label == current_page else ""}" href="{page_href(label)}" target="_self">{escape(label)}</a>'
-            for label in nav_options
+            for label in workflow_pages
+        ]
+    )
+    account_buttons_html = "".join(
+        [
+            f'<a class="app-nav-link-btn app-nav-account-link{" active" if label == current_page else ""}" href="{page_href(label)}" target="_self">{escape(label)}</a>'
+            for label in account_pages
         ]
     )
     st.markdown(
@@ -3502,7 +3517,8 @@ def render_app_nav_rail(user, current_page, nav_options):
             "</div>"
             '<div class="app-nav-divider"></div>'
             f'<div class="app-nav-links">{nav_buttons_html}</div>'
-            '<div class="app-nav-divider"></div>'
+            + (f'<div class="app-nav-divider"></div><div class="app-nav-links app-nav-account-links">{account_buttons_html}</div>' if account_buttons_html else "")
+            + '<div class="app-nav-divider"></div>'
             '<a class="app-nav-signout-btn" href="?action=signout" target="_self">Sign Out</a>'
             "</div>"
         ),
@@ -6747,6 +6763,48 @@ def page_saved_lists():
         st.info("No saved lists yet.")
         return
 
+    st.markdown(
+        """
+        <style>
+        .saved-lists-flow-box {
+            border: 1px solid rgba(96, 165, 250, 0.2);
+            border-radius: 0.95rem;
+            background: rgba(15, 23, 42, 0.28);
+            padding: 0.9rem 1rem 0.2rem 1rem;
+            margin-bottom: 1rem;
+        }
+        .saved-lists-flow-title {
+            font-size: 0.98rem;
+            font-weight: 760;
+            color: #eff6ff;
+            margin-bottom: 0.2rem;
+        }
+        .saved-lists-flow-copy {
+            color: #cbd5e1;
+            line-height: 1.5;
+            margin-bottom: 0.8rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        (
+            '<div class="saved-lists-flow-box">'
+            '<div class="saved-lists-flow-title">Use these results as your working base</div>'
+            '<div class="saved-lists-flow-copy">Clean the saved rows here, then move into company pursuit or service-gap analysis.</div>'
+            '</div>'
+        ),
+        unsafe_allow_html=True,
+    )
+    flow_cols = st.columns(2)
+    if flow_cols[0].button("Open Next Steps", type="primary", use_container_width=True, key="saved_lists_open_next_steps"):
+        queue_navigation("Next Steps")
+        st.rerun()
+    if flow_cols[1].button("Open Potential Expansions", type="primary", use_container_width=True, key="saved_lists_open_expansions"):
+        queue_navigation("Potential Expansions")
+        st.rerun()
+
     master_company_df = build_master_saved_data()
     if master_company_df.empty:
         st.info("Saved lists exist, but the master company list is still empty.")
@@ -7471,12 +7529,12 @@ else:
     inject_app_chrome_styles()
     nav_options = [
         "Dashboard",
-        "Plans & Billing",
         "Service Profiles",
         "Generate List",
         "Saved Lists",
-        "Potential Expansions",
         "Next Steps",
+        "Potential Expansions",
+        "Plans & Billing",
     ]
     if is_admin_user(user):
         nav_options.append("Users")
