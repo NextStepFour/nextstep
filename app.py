@@ -1191,6 +1191,7 @@ Rules:
 - supporting_signal_count must be an integer
 - service_description should be a short factual description of the suggested service based on repeated job-posting language
 - connected_current_services must be a list of current saved services this suggested expansion most closely connects to
+- Use the saved service categories as context when deciding which current services the expansion most closely connects to
 - companies_showing_interest must be a list of companies whose postings suggest demand for the suggested service
 - sample_job_titles must be a list
 - sample_responsibilities must be a list
@@ -2389,6 +2390,88 @@ def ordered_service_categories(svc_df):
     return categories
 
 
+def choose_expansion_category(expansion_row, svc_df):
+    if svc_df is None or svc_df.empty:
+        return DEFAULT_SERVICE_CATEGORY
+
+    working = prepare_service_map_df(svc_df)
+    if working.empty:
+        return DEFAULT_SERVICE_CATEGORY
+
+    category_order = ordered_service_categories(working)
+    category_scores = {category: 0 for category in category_order}
+    connected_services = {safe_text(name) for name in split_service_values(expansion_row.get("connected_current_services")) if safe_text(name)}
+    expansion_tokens = keyword_tokens(
+        expansion_row.get("suggested_service"),
+        expansion_row.get("service_description"),
+        expansion_row.get("sample_job_titles"),
+        expansion_row.get("sample_responsibilities"),
+        expansion_row.get("common_education_requirements"),
+        expansion_row.get("common_credential_requirements"),
+        expansion_row.get("common_licensure_requirements"),
+    )
+
+    for _, row in working.iterrows():
+        category_name = safe_text(row.get("service_category"), DEFAULT_SERVICE_CATEGORY) or DEFAULT_SERVICE_CATEGORY
+        service_name = safe_text(row.get("service_name"))
+        if service_name in connected_services:
+            category_scores[category_name] = category_scores.get(category_name, 0) + 8
+
+        row_tokens = keyword_tokens(
+            row.get("service_name"),
+            row.get("service_description"),
+            row.get("service_category"),
+        )
+        overlap = len(expansion_tokens & row_tokens)
+        if overlap:
+            category_scores[category_name] = category_scores.get(category_name, 0) + overlap
+
+    best_category = max(
+        category_scores.items(),
+        key=lambda item: (
+            item[1],
+            item[0] != DEFAULT_SERVICE_CATEGORY,
+            -category_order.index(item[0]) if item[0] in category_order else 0,
+        ),
+    )[0]
+    return best_category or DEFAULT_SERVICE_CATEGORY
+
+
+def build_expansion_display_df(expansion_df, svc_df):
+    if expansion_df is None or expansion_df.empty:
+        return pd.DataFrame(columns=list(expansion_df.columns) + ["expansion_category", "expansion_number", "expansion_display_label"]) if expansion_df is not None else pd.DataFrame()
+
+    service_library = prepare_service_map_df(svc_df) if svc_df is not None and not svc_df.empty else pd.DataFrame()
+    category_order = ordered_service_categories(service_library)
+    base_numbers = (
+        service_library.groupby("service_category")["service_number"].max().to_dict()
+        if not service_library.empty
+        else {}
+    )
+    next_offsets = {}
+    categories = []
+    numbers = []
+    labels = []
+
+    for _, row in expansion_df.iterrows():
+        category_name = choose_expansion_category(row, service_library)
+        current_offset = next_offsets.get(category_name, 0)
+        expansion_number = int(base_numbers.get(category_name, 0)) + current_offset + 1
+        next_offsets[category_name] = current_offset + 1
+
+        categories.append(category_name)
+        numbers.append(expansion_number)
+        labels.append(
+            f"#{expansion_number} | {category_name} | {safe_text(row.get('suggested_service'), 'Unknown expansion')}"
+        )
+
+    working = expansion_df.copy()
+    working["expansion_category"] = categories
+    working["expansion_number"] = numbers
+    working["expansion_display_label"] = labels
+    return working
+
+
 def service_category_picker_options(svc_df, current_value=""):
     categories = ordered_service_categories(svc_df)
     cleaned_current = safe_text(current_value).strip()
@@ -3119,6 +3202,7 @@ def build_expansion_context(selected_services_df, evidence_df):
     for _, row in selected_services_df.iterrows():
         services_payload.append(
             {
+                "service_category": safe_text(row.get("service_category"), DEFAULT_SERVICE_CATEGORY),
                 "service_name": row["service_name"],
                 "service_description": row["service_description"],
                 "target_location": row["target_location"],
@@ -3691,7 +3775,9 @@ def render_potential_expansions_report(
     service_count,
     key_suffix="current",
 ):
-    display_expansion_df = format_lists_for_display(expansion_df)
+    service_library_df = services_df()
+    expansion_display_df = build_expansion_display_df(expansion_df, service_library_df)
+    display_expansion_df = format_lists_for_display(expansion_display_df)
     evidence_df = format_lists_for_display(evidence_df)
 
     st.markdown(
@@ -3806,7 +3892,7 @@ def render_potential_expansions_report(
         unsafe_allow_html=True,
     )
 
-    most_repeated_gap = safe_text(display_expansion_df.iloc[0]["suggested_service"]) if not display_expansion_df.empty else "Unknown"
+    most_repeated_gap = safe_text(display_expansion_df.iloc[0]["expansion_display_label"]) if not display_expansion_df.empty else "Unknown"
     st.markdown('<div class="expansion-wrap">', unsafe_allow_html=True)
     st.caption(
         f"Showing saved expansion analysis from {created_at} | {mode_text} | Services analyzed: {service_count}"
@@ -3825,7 +3911,7 @@ def render_potential_expansions_report(
 
     ranked_table_df = display_expansion_df[
         [
-            "suggested_service",
+            "expansion_display_label",
             "service_description",
             "supporting_signal_count",
             "companies_showing_interest",
@@ -3868,7 +3954,7 @@ def render_potential_expansions_report(
     for idx, (_, row) in enumerate(display_expansion_df.iterrows(), start=1):
         company_views = build_expansion_company_views(row, evidence_df)
         with st.expander(
-            f"#{idx} {safe_text(row['suggested_service'], 'Unknown expansion')} | {safe_text(str(row['supporting_signal_count']), '0')} signals",
+            f"{safe_text(row['expansion_display_label'], 'Unknown expansion')} | {safe_text(str(row['supporting_signal_count']), '0')} signals",
             expanded=False,
         ):
             company_cards_html = []
@@ -3904,7 +3990,7 @@ def render_potential_expansions_report(
             st.markdown(
                 (
                     '<div class="expansion-card">'
-                    f'<div class="expansion-card-title">{escape(safe_text(row["suggested_service"], "Unknown expansion"))}</div>'
+                    f'<div class="expansion-card-title">{escape(safe_text(row["expansion_display_label"], "Unknown expansion"))}</div>'
                     f'<div class="expansion-card-section"><div class="expansion-card-label">Service Description</div><div class="expansion-card-value">{escape(safe_text(row["service_description"], "No service description captured."))}</div></div>'
                     f'<div class="expansion-card-section"><div class="expansion-card-label">Common Qualifications Seen</div><div class="expansion-card-value">{escape(qualification_summary_text(row.get("common_education_requirements"), row.get("common_credential_requirements"), row.get("common_licensure_requirements")))}</div></div>'
                     f'<div class="expansion-card-section"><div class="expansion-card-label">Companies Showing Interest</div><div class="expansion-card-value">{escape(safe_text(row["companies_showing_interest"], "No companies captured."))}</div></div>'
@@ -4351,6 +4437,7 @@ def expansion_pdf_data(expansion_df, meta):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
+    display_expansion_df = build_expansion_display_df(expansion_df, services_df())
     story = [
         Paragraph(f"{APP_NAME} Potential Expansions Report", styles["Title"]),
         Spacer(1, 10),
@@ -4360,10 +4447,10 @@ def expansion_pdf_data(expansion_df, meta):
         Paragraph(escape(f"Time window: {meta['time_window']} | Search mode: {meta['mode']}"), styles["Normal"]),
         Spacer(1, 14),
     ]
-    for _, row in expansion_df.iterrows():
+    for _, row in display_expansion_df.iterrows():
         story.extend(
             [
-                Paragraph(escape(str(row["suggested_service"] or "Unknown expansion")), styles["Heading2"]),
+                Paragraph(escape(str(row.get("expansion_display_label") or row["suggested_service"] or "Unknown expansion")), styles["Heading2"]),
                 Paragraph(escape(f"Service description: {row['service_description'] or 'Unknown'}"), styles["Normal"]),
                 Paragraph(escape(f"Frequency: {row['supporting_signal_count']}"), styles["Normal"]),
                 Paragraph(escape(f"Connected current services: {row['connected_current_services']}"), styles["Normal"]),
