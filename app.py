@@ -2346,6 +2346,32 @@ def move_service_within_category(service_id, direction, user_id=None):
     resequence_service_category(category_name, user["id"])
 
 
+def set_service_tile_flash(message, level="success"):
+    st.session_state["_service_tile_flash"] = {"message": message, "level": level}
+
+
+def begin_service_edit(service_id):
+    service_id = int(service_id)
+    st.session_state["service_rename_id"] = service_id
+    st.session_state["service_focus_id"] = service_id
+    st.session_state.pop("service_delete_id", None)
+
+
+def begin_service_delete(service_id):
+    service_id = int(service_id)
+    st.session_state["service_delete_id"] = service_id
+    st.session_state["service_focus_id"] = service_id
+    st.session_state.pop("service_rename_id", None)
+
+
+def move_service_tile_action(service_id, direction):
+    service_id = int(service_id)
+    move_service_within_category(service_id, direction)
+    st.session_state["service_focus_id"] = service_id
+    st.session_state.pop("service_rename_id", None)
+    st.session_state.pop("service_delete_id", None)
+
+
 def build_service_option_map(svc_df):
     if svc_df.empty:
         return {}
@@ -3490,6 +3516,309 @@ def service_action_link(service_id, action, icon_name, label, danger=False):
         "</a>"
     )
 
+
+@st.fragment
+def render_service_cards_fragment():
+    flash = st.session_state.pop("_service_tile_flash", None)
+    if flash:
+        level = safe_text(flash.get("level"), "info").strip().lower()
+        message = safe_text(flash.get("message"))
+        if message:
+            getattr(st, level if level in {"success", "info", "warning", "error"} else "info")(message)
+
+    svc = services_df()
+    if svc.empty:
+        st.info("No service profiles saved yet.")
+        return
+
+    st.markdown(
+        """
+        <style>
+        .service-map-wrap {
+            max-width: 1120px;
+            margin: 0 auto;
+        }
+        .service-map-kicker {
+            color: #7f8faa;
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin: 0.15rem 0 0.7rem 0;
+        }
+        .service-category-header {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            margin: 0.3rem 0 0.7rem 0;
+            padding: 0;
+        }
+        .service-category-title {
+            font-size: 0.98rem;
+            font-weight: 750;
+            color: #eff6ff;
+            line-height: 1.25;
+            white-space: nowrap;
+        }
+        .service-category-line {
+            flex: 1 1 auto;
+            height: 1px;
+            background: rgba(148, 163, 184, 0.18);
+        }
+        .service-chip-label {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #eff6ff;
+            line-height: 1.45;
+            margin: 0;
+            word-break: break-word;
+        }
+        .service-chip-description {
+            color: #dbeafe;
+            font-size: 0.9rem;
+            line-height: 1.55;
+            margin: 0.65rem 0 0.75rem 0;
+            min-height: 58px;
+        }
+        .service-chip-meta {
+            color: #cbd5e1;
+            font-size: 0.86rem;
+            line-height: 1.5;
+            margin-top: 0.05rem;
+        }
+        [class*="st-key-service_card_"] [data-testid="stVerticalBlockBorderWrapper"],
+        [class*="st-key-service_card_active_"] [data-testid="stVerticalBlockBorderWrapper"] {
+            border: 1px solid var(--brand-border) !important;
+            border-radius: 0.95rem !important;
+            background: linear-gradient(180deg, rgba(96, 165, 250, 0.08), rgba(255,255,255,0.02)) !important;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.10) !important;
+        }
+        [class*="st-key-service_card_active_"] [data-testid="stVerticalBlockBorderWrapper"] {
+            border-color: var(--brand-blue) !important;
+            background: linear-gradient(180deg, rgba(96, 165, 250, 0.14), rgba(255,255,255,0.03)) !important;
+            box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.18) inset, 0 12px 28px rgba(15, 23, 42, 0.12) !important;
+        }
+        [class*="st-key-service_card_"] [data-testid="stVerticalBlock"],
+        [class*="st-key-service_card_active_"] [data-testid="stVerticalBlock"] {
+            gap: 0.2rem;
+        }
+        [class*="st-key-service_btn_"] button {
+            min-height: 1.42rem !important;
+            height: 1.42rem !important;
+            width: 1.42rem !important;
+            padding: 0 !important;
+            border-radius: 0.42rem !important;
+            border: 1px solid transparent !important;
+            background: transparent !important;
+            color: #7f8faa !important;
+            box-shadow: none !important;
+            transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
+            opacity: 0.68;
+        }
+        [class*="st-key-service_btn_"] button p {
+            font-size: 0 !important;
+            line-height: 0 !important;
+            margin: 0 !important;
+        }
+        [class*="st-key-service_btn_"] button [data-testid="stIconMaterial"] {
+            font-size: 0.82rem !important;
+        }
+        [class*="st-key-service_btn_"] button:hover:not(:disabled) {
+            background: rgba(96, 165, 250, 0.09) !important;
+            border-color: rgba(96, 165, 250, 0.18) !important;
+            color: #dbeafe !important;
+            opacity: 1;
+            transform: translateY(-1px);
+        }
+        [class*="st-key-service_btn_delete_"] button:hover:not(:disabled) {
+            background: rgba(239, 68, 68, 0.09) !important;
+            border-color: rgba(239, 68, 68, 0.18) !important;
+            color: #fecaca !important;
+        }
+        [class*="st-key-service_btn_"] button:disabled {
+            opacity: 0.25 !important;
+            cursor: default !important;
+        }
+        @media (max-width: 960px) {
+            [class*="st-key-service_card_"], [class*="st-key-service_card_active_"] {
+                margin-bottom: 0.2rem;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="service-map-kicker">Saved services</div>', unsafe_allow_html=True)
+
+    svc = prepare_service_map_df(svc)
+    rename_id = st.session_state.get("service_rename_id")
+    delete_id = st.session_state.get("service_delete_id")
+    focus_id = st.session_state.get("service_focus_id")
+
+    for category_name, category_df in svc.groupby("service_category", sort=False):
+        st.markdown(
+            (
+                '<div class="service-category-header">'
+                f'<div class="service-category-title">{escape(safe_text(category_name, DEFAULT_SERVICE_CATEGORY))}</div>'
+                '<div class="service-category-line"></div>'
+                '</div>'
+            ),
+            unsafe_allow_html=True,
+        )
+
+        tile_columns = st.columns(3)
+        category_size = len(category_df)
+        for idx, (_, row) in enumerate(category_df.iterrows()):
+            service_id = int(row["id"])
+            service_number = int(row["service_number"])
+            description_preview = safe_text(row["service_description"])
+            if len(description_preview) > 120:
+                description_preview = description_preview[:117].rstrip() + "..."
+            created_text = format_short_date(row["created_at"]) or safe_text(row["created_at"], "")
+            card_key = f"service_card_active_{service_id}" if focus_id == service_id else f"service_card_{service_id}"
+
+            with tile_columns[idx % 3]:
+                with st.container(key=card_key, border=True):
+                    header_cols = st.columns([8.6, 0.7, 0.7, 0.7, 0.7], gap="small", vertical_alignment="center")
+                    header_cols[0].markdown(
+                        f'<div class="service-chip-label">#{service_number} | {escape(safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    header_cols[1].button(
+                        "\u00a0",
+                        key=f"service_btn_edit_{service_id}",
+                        icon=":material/edit:",
+                        help="Edit service",
+                        type="tertiary",
+                        width="content",
+                        on_click=begin_service_edit,
+                        args=(service_id,),
+                    )
+                    header_cols[2].button(
+                        "\u00a0",
+                        key=f"service_btn_delete_{service_id}",
+                        icon=":material/delete:",
+                        help="Delete service",
+                        type="tertiary",
+                        width="content",
+                        on_click=begin_service_delete,
+                        args=(service_id,),
+                    )
+                    header_cols[3].button(
+                        "\u00a0",
+                        key=f"service_btn_up_{service_id}",
+                        icon=":material/arrow_upward:",
+                        help="Move service up",
+                        type="tertiary",
+                        width="content",
+                        on_click=move_service_tile_action,
+                        args=(service_id, "up"),
+                        disabled=idx == 0,
+                    )
+                    header_cols[4].button(
+                        "\u00a0",
+                        key=f"service_btn_down_{service_id}",
+                        icon=":material/arrow_downward:",
+                        help="Move service down",
+                        type="tertiary",
+                        width="content",
+                        on_click=move_service_tile_action,
+                        args=(service_id, "down"),
+                        disabled=idx == category_size - 1,
+                    )
+
+                    st.markdown(
+                        f'<div class="service-chip-description">{escape(description_preview or "No description available.")}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        (
+                            '<div class="service-chip-meta">'
+                            f'Target location: {escape(safe_text(row["target_location"], "Any U.S. location"))}<br>'
+                            f'Created: {escape(created_text or "Unknown")}'
+                            '</div>'
+                        ),
+                        unsafe_allow_html=True,
+                    )
+
+                    if rename_id == service_id:
+                        with st.form(f"rename_service_form_{service_id}"):
+                            current_row_category = safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY).strip() or DEFAULT_SERVICE_CATEGORY
+                            rename_category_options = [SERVICE_CATEGORY_ADD_OPTION] + ordered_service_categories(svc)
+                            if current_row_category not in rename_category_options:
+                                rename_category_options.append(current_row_category)
+                            default_category_index = rename_category_options.index(current_row_category)
+                            selected_rename_category = st.selectbox(
+                                "Service Category",
+                                options=rename_category_options,
+                                index=default_category_index,
+                                key=f"rename_category_select_{service_id}",
+                            )
+                            rename_new_category = ""
+                            if selected_rename_category == SERVICE_CATEGORY_ADD_OPTION:
+                                rename_new_category = st.text_input(
+                                    "New category",
+                                    placeholder="Education, Healthcare, Landscaping",
+                                    key=f"rename_category_new_{service_id}",
+                                )
+                            new_category = rename_new_category.strip() if selected_rename_category == SERVICE_CATEGORY_ADD_OPTION else selected_rename_category
+                            new_title = st.text_input(
+                                "Service",
+                                value=safe_text(row["service_name"]),
+                                key=f"rename_title_{service_id}",
+                            )
+                            new_description = st.text_area(
+                                "Service Description",
+                                value=safe_text(row["service_description"]),
+                                height=160,
+                                key=f"rename_description_{service_id}",
+                            )
+                            new_location = st.text_input(
+                                "Target Location",
+                                value=safe_text(row["target_location"], "Any U.S. location"),
+                                key=f"rename_location_{service_id}",
+                            )
+                            form_col1, form_col2 = st.columns(2)
+                            save_rename = form_col1.form_submit_button("Save", type="primary", use_container_width=True)
+                            cancel_rename = form_col2.form_submit_button("Cancel", type="primary", use_container_width=True)
+                        if save_rename:
+                            if selected_rename_category == SERVICE_CATEGORY_ADD_OPTION and not new_category.strip():
+                                st.error("Enter a category name or choose an existing category.")
+                            elif not new_title.strip() or not new_description.strip():
+                                st.error("Please enter a service and service description.")
+                            else:
+                                update_service_profile(
+                                    service_id,
+                                    new_category,
+                                    new_title,
+                                    new_description,
+                                    new_location,
+                                )
+                                st.session_state.pop("service_rename_id", None)
+                                st.session_state["service_focus_id"] = service_id
+                                set_service_tile_flash("Service profile updated.")
+                                st.rerun(scope="fragment")
+                        if cancel_rename:
+                            st.session_state.pop("service_rename_id", None)
+                            st.rerun(scope="fragment")
+
+                    if delete_id == service_id:
+                        st.warning("Delete this service profile?")
+                        with st.form(f"delete_service_form_{service_id}"):
+                            confirm_col1, confirm_col2 = st.columns(2)
+                            confirm_delete = confirm_col1.form_submit_button("Confirm Delete", type="primary", use_container_width=True)
+                            cancel_delete = confirm_col2.form_submit_button("Cancel", type="primary", use_container_width=True)
+                        if confirm_delete:
+                            delete_service(service_id)
+                            st.session_state.pop("service_delete_id", None)
+                            if st.session_state.get("service_focus_id") == service_id:
+                                st.session_state.pop("service_focus_id", None)
+                            set_service_tile_flash("Service profile deleted.")
+                            st.rerun(scope="fragment")
+                        if cancel_delete:
+                            st.session_state.pop("service_delete_id", None)
+                            st.rerun(scope="fragment")
 
 def resolve_app_page(nav_options):
     slug_map = {page_slug(option): option for option in nav_options}
@@ -6218,41 +6547,7 @@ def page_dashboard():
 
 def page_services():
     st.title("Service Profiles")
-    service_action = safe_text(st.query_params.get("service_action")).strip().lower()
-    service_action_id = safe_text(st.query_params.get("service_id")).strip()
-    query_rename_id = None
-    query_delete_id = None
-    query_focus_id = None
-    if service_action and service_action_id:
-        try:
-            action_service_id = int(service_action_id)
-        except ValueError:
-            action_service_id = None
-        if action_service_id:
-            if service_action == "edit":
-                query_rename_id = action_service_id
-                query_focus_id = action_service_id
-                st.session_state["service_rename_id"] = action_service_id
-                st.session_state["service_focus_id"] = action_service_id
-                st.session_state.pop("service_delete_id", None)
-            elif service_action == "delete":
-                query_delete_id = action_service_id
-                query_focus_id = action_service_id
-                st.session_state["service_delete_id"] = action_service_id
-                st.session_state["service_focus_id"] = action_service_id
-                st.session_state.pop("service_rename_id", None)
-            elif service_action == "up":
-                move_service_within_category(action_service_id, "up")
-                st.session_state["service_focus_id"] = action_service_id
-                clear_service_action_query_params()
-                st.rerun()
-            elif service_action == "down":
-                move_service_within_category(action_service_id, "down")
-                st.session_state["service_focus_id"] = action_service_id
-                clear_service_action_query_params()
-                st.rerun()
-        if service_action in {"edit", "delete"}:
-            clear_service_action_query_params()
+    clear_service_action_query_params()
     if st.session_state.pop("_reset_service_form", False):
         st.session_state["service_category_input"] = ""
         st.session_state["service_category_select"] = SERVICE_CATEGORY_DEFAULT_OPTION
@@ -6328,272 +6623,7 @@ def page_services():
             st.session_state["_reset_service_form"] = True
             st.success(f"Service profile saved under {safe_text(category.strip(), DEFAULT_SERVICE_CATEGORY) or DEFAULT_SERVICE_CATEGORY}.")
             st.rerun()
-    if svc.empty:
-        st.info("No service profiles saved yet.")
-    else:
-        st.markdown(
-            """
-            <style>
-            .service-map-wrap {
-                max-width: 1120px;
-                margin: 0 auto;
-            }
-            .service-map-kicker {
-                color: #7f8faa;
-                font-size: 0.78rem;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-                margin: 0.15rem 0 0.7rem 0;
-            }
-            .service-category-header {
-                display: flex;
-                align-items: center;
-                gap: 0.8rem;
-                margin: 0.3rem 0 0.7rem 0;
-                padding: 0;
-            }
-            .service-category-title {
-                font-size: 0.98rem;
-                font-weight: 750;
-                color: #eff6ff;
-                line-height: 1.25;
-                white-space: nowrap;
-            }
-            .service-category-line {
-                flex: 1 1 auto;
-                height: 1px;
-                background: rgba(148, 163, 184, 0.18);
-            }
-            .service-tile-actions {
-                position: absolute;
-                top: 0.45rem;
-                right: 0.5rem;
-                display: flex;
-                align-items: center;
-                gap: 0.18rem;
-                z-index: 2;
-            }
-            .service-icon-btn {
-                width: 1.42rem;
-                height: 1.42rem;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                border-radius: 0.42rem;
-                border: 1px solid transparent;
-                background: transparent;
-                color: #7f8faa !important;
-                text-decoration: none !important;
-                transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
-                opacity: 0.68;
-            }
-            .service-icon-btn svg {
-                width: 0.72rem;
-                height: 0.72rem;
-                display: block;
-            }
-            .service-icon-btn:hover {
-                background: rgba(96, 165, 250, 0.09);
-                border-color: rgba(96, 165, 250, 0.18);
-                color: #dbeafe !important;
-                opacity: 1;
-                transform: translateY(-1px);
-            }
-            .service-icon-btn.danger:hover {
-                background: rgba(239, 68, 68, 0.09);
-                border-color: rgba(239, 68, 68, 0.18);
-                color: #fecaca !important;
-            }
-            .service-chip-grid {
-                display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-                gap: 0.9rem;
-                margin-bottom: 1rem;
-            }
-            .service-chip-tile {
-                border: 1px solid var(--brand-border);
-                border-radius: 0.95rem;
-                padding: 0.9rem 0.95rem;
-                background: linear-gradient(180deg, rgba(96, 165, 250, 0.08), rgba(255,255,255,0.02));
-                box-shadow: 0 12px 28px rgba(15, 23, 42, 0.10);
-                min-height: 168px;
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-                position: relative;
-            }
-            .service-chip-tile.active {
-                border-color: var(--brand-blue);
-                background: linear-gradient(180deg, rgba(96, 165, 250, 0.14), rgba(255,255,255,0.03));
-                box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.18) inset, 0 12px 28px rgba(15, 23, 42, 0.12);
-            }
-            .service-chip-label {
-                font-size: 1rem;
-                font-weight: 800;
-                color: #eff6ff;
-                line-height: 1.45;
-                margin-bottom: 0.7rem;
-                word-break: break-word;
-                padding-right: 6rem;
-            }
-            .service-chip-meta {
-                color: #cbd5e1;
-                font-size: 0.86rem;
-                line-height: 1.5;
-            }
-            .service-chip-description {
-                color: #dbeafe;
-                font-size: 0.9rem;
-                line-height: 1.55;
-                margin: 0.7rem 0 0.75rem 0;
-                min-height: 58px;
-            }
-            @media (max-width: 960px) {
-                .service-chip-grid {
-                    grid-template-columns: 1fr 1fr;
-                }
-            }
-            @media (max-width: 640px) {
-                .service-chip-grid {
-                    grid-template-columns: 1fr;
-                }
-            }
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.markdown('<div class="service-map-wrap">', unsafe_allow_html=True)
-        st.markdown('<div class="service-map-kicker">Saved services</div>', unsafe_allow_html=True)
-
-        svc = prepare_service_map_df(svc)
-
-        rename_id = query_rename_id if query_rename_id is not None else st.session_state.get("service_rename_id")
-        delete_id = query_delete_id if query_delete_id is not None else st.session_state.get("service_delete_id")
-        focus_id = query_focus_id if query_focus_id is not None else st.session_state.get("service_focus_id")
-        for category_name, category_df in svc.groupby("service_category", sort=False):
-            st.markdown(
-                (
-                    '<div class="service-category-header">'
-                    f'<div class="service-category-title">{escape(safe_text(category_name, DEFAULT_SERVICE_CATEGORY))}</div>'
-                    '<div class="service-category-line"></div>'
-                    '</div>'
-                ),
-                unsafe_allow_html=True,
-            )
-
-            st.markdown('<div class="service-chip-grid">', unsafe_allow_html=True)
-            tile_columns = st.columns(3)
-
-            for idx, (_, row) in enumerate(category_df.iterrows()):
-                service_id = int(row["id"])
-                service_number = int(row["service_number"])
-                description_preview = safe_text(row["service_description"])
-                if len(description_preview) > 120:
-                    description_preview = description_preview[:117].rstrip() + "..."
-                created_text = format_short_date(row["created_at"]) or safe_text(row["created_at"], "")
-
-                with tile_columns[idx % 3]:
-                    active_class = " active" if focus_id == service_id else ""
-                    card_actions = (
-                        '<div class="service-tile-actions">'
-                        f'{service_action_link(service_id, "edit", "edit", "Edit service")}'
-                        f'{service_action_link(service_id, "delete", "delete", "Delete service", danger=True)}'
-                        f'{service_action_link(service_id, "up", "up", "Move service up")}'
-                        f'{service_action_link(service_id, "down", "down", "Move service down")}'
-                        '</div>'
-                    )
-                    st.markdown(
-                        (
-                            f'<div class="service-chip-tile{active_class}">'
-                            f"{card_actions}"
-                            f'<div class="service-chip-label">#{service_number} | {escape(safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
-                            f'<div class="service-chip-description">{escape(description_preview or "No description available.")}</div>'
-                            '<div class="service-chip-meta">'
-                            f'Target location: {escape(safe_text(row["target_location"], "Any U.S. location"))}<br>'
-                            f'Created: {escape(created_text or "Unknown")}'
-                            '</div>'
-                            '</div>'
-                        ),
-                        unsafe_allow_html=True,
-                    )
-
-                    if rename_id == service_id:
-                        with st.form(f"rename_service_form_{service_id}"):
-                            current_row_category = safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY).strip() or DEFAULT_SERVICE_CATEGORY
-                            rename_category_options = [SERVICE_CATEGORY_ADD_OPTION] + ordered_service_categories(svc)
-                            if current_row_category not in rename_category_options:
-                                rename_category_options.append(current_row_category)
-                            default_category_index = rename_category_options.index(current_row_category)
-                            selected_rename_category = st.selectbox(
-                                "Service Category",
-                                options=rename_category_options,
-                                index=default_category_index,
-                                key=f"rename_category_select_{service_id}",
-                            )
-                            rename_new_category = ""
-                            if selected_rename_category == SERVICE_CATEGORY_ADD_OPTION:
-                                rename_new_category = st.text_input(
-                                    "New category",
-                                    placeholder="Education, Healthcare, Landscaping",
-                                    key=f"rename_category_new_{service_id}",
-                                )
-                            new_category = rename_new_category.strip() if selected_rename_category == SERVICE_CATEGORY_ADD_OPTION else selected_rename_category
-                            new_title = st.text_input(
-                                "Service",
-                                value=safe_text(row["service_name"]),
-                                key=f"rename_title_{service_id}",
-                            )
-                            new_description = st.text_area(
-                                "Service Description",
-                                value=safe_text(row["service_description"]),
-                                height=160,
-                                key=f"rename_description_{service_id}",
-                            )
-                            new_location = st.text_input(
-                                "Target Location",
-                                value=safe_text(row["target_location"], "Any U.S. location"),
-                                key=f"rename_location_{service_id}",
-                            )
-                            form_col1, form_col2 = st.columns(2)
-                            save_rename = form_col1.form_submit_button("Save", type="primary", use_container_width=True)
-                            cancel_rename = form_col2.form_submit_button("Cancel", type="primary", use_container_width=True)
-                        if save_rename:
-                            if selected_rename_category == SERVICE_CATEGORY_ADD_OPTION and not new_category.strip():
-                                st.error("Enter a category name or choose an existing category.")
-                            elif not new_title.strip() or not new_description.strip():
-                                st.error("Please enter a service and service description.")
-                            else:
-                                update_service_profile(
-                                    service_id,
-                                    new_category,
-                                    new_title,
-                                    new_description,
-                                    new_location,
-                                )
-                                st.session_state.pop("service_rename_id", None)
-                                st.success("Service profile updated.")
-                                st.rerun()
-                        if cancel_rename:
-                            st.session_state.pop("service_rename_id", None)
-                            st.rerun()
-
-                    if delete_id == service_id:
-                        st.warning("Delete this service profile?")
-                        with st.form(f"delete_service_form_{service_id}"):
-                            confirm_col1, confirm_col2 = st.columns(2)
-                            confirm_delete = confirm_col1.form_submit_button("Confirm Delete", type="primary", use_container_width=True)
-                            cancel_delete = confirm_col2.form_submit_button("Cancel", type="primary", use_container_width=True)
-                        if confirm_delete:
-                            delete_service(service_id)
-                            st.session_state.pop("service_delete_id", None)
-                            st.success("Service profile deleted.")
-                            st.rerun()
-                        if cancel_delete:
-                            st.session_state.pop("service_delete_id", None)
-                            st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+    render_service_cards_fragment()
 
 
 def page_generate():
