@@ -2522,30 +2522,22 @@ def render_grouped_service_selector(svc_df, state_prefix, heading, helper_text=N
             line-height: 1.45;
             margin-bottom: 0.65rem;
         }
-        .grouped-service-selector-shell {
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 0.95rem;
-            background: rgba(15, 23, 42, 0.34);
-            padding: 0.8rem 0.9rem 0.55rem 0.9rem;
+        .grouped-service-selector-summary {
+            color: #9fb0c6;
+            font-size: 0.88rem;
+            line-height: 1.4;
+            margin: -0.1rem 0 0.55rem 0;
         }
-        .grouped-service-selector-section {
-            padding-bottom: 0.35rem;
-            margin-bottom: 0.45rem;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-        }
-        .grouped-service-selector-section:last-child {
-            border-bottom: 0;
-            margin-bottom: 0;
-            padding-bottom: 0;
-        }
-        .grouped-service-selector-meta {
+        .grouped-service-selector-category-meta {
             color: #7f8faa;
             font-size: 0.8rem;
             margin: -0.15rem 0 0.35rem 2rem;
             line-height: 1.35;
         }
-        .grouped-service-selector-child {
-            margin-left: 1.25rem;
+        .grouped-service-selector-divider {
+            height: 1px;
+            background: rgba(148, 163, 184, 0.12);
+            margin: 0.4rem 0 0.55rem 0;
         }
         </style>
         """,
@@ -2558,43 +2550,75 @@ def render_grouped_service_selector(svc_df, state_prefix, heading, helper_text=N
 
     options = build_service_option_map(working)
     labels_by_id = {int(row["id"]): service_map_label(row) for _, row in working.iterrows()}
+    category_groups = list(working.groupby("service_category", sort=False))
 
-    with st.container(border=True):
-        for category_index, (category_name, category_df) in enumerate(working.groupby("service_category", sort=False)):
+    for category_name, category_df in category_groups:
+        service_ids = [int(row["id"]) for _, row in category_df.iterrows()]
+        child_keys = [f"{state_prefix}_service_{service_id}" for service_id in service_ids]
+        category_key = f"{state_prefix}_category_{page_slug(category_name)}"
+        for child_key in child_keys:
+            if child_key not in st.session_state:
+                st.session_state[child_key] = False
+        if category_key not in st.session_state:
+            st.session_state[category_key] = bool(child_keys) and all(bool(st.session_state.get(child_key, False)) for child_key in child_keys)
+
+    selected_labels = [
+        labels_by_id[int(row["id"])]
+        for _, row in working.iterrows()
+        if bool(st.session_state.get(f"{state_prefix}_service_{int(row['id'])}", False))
+    ]
+    selected_categories = []
+    for category_name, category_df in category_groups:
+        selected_count = sum(
+            bool(st.session_state.get(f"{state_prefix}_service_{int(row['id'])}", False))
+            for _, row in category_df.iterrows()
+        )
+        if selected_count:
+            selected_categories.append(f"{safe_text(category_name, DEFAULT_SERVICE_CATEGORY)} ({selected_count})")
+
+    if selected_labels:
+        summary_text = ", ".join(selected_categories[:3])
+        if len(selected_categories) > 3:
+            summary_text += f" +{len(selected_categories) - 3} more"
+        dropdown_label = f"{len(selected_labels)} selected | {summary_text}"
+    else:
+        dropdown_label = "Choose categories or services"
+
+    with st.expander(dropdown_label, expanded=bool(selected_labels)):
+        st.markdown(
+            f'<div class="grouped-service-selector-summary">{escape("Select a category to reveal its services, then uncheck any scopes you do not want.")}</div>',
+            unsafe_allow_html=True,
+        )
+        for category_index, (category_name, category_df) in enumerate(category_groups):
             service_ids = [int(row["id"]) for _, row in category_df.iterrows()]
             child_keys = [f"{state_prefix}_service_{service_id}" for service_id in service_ids]
             category_key = f"{state_prefix}_category_{page_slug(category_name)}"
-            for child_key in child_keys:
-                if child_key not in st.session_state:
-                    st.session_state[child_key] = False
-            if category_key not in st.session_state:
-                st.session_state[category_key] = bool(child_keys) and all(bool(st.session_state.get(child_key, False)) for child_key in child_keys)
-
             selected_count = sum(bool(st.session_state.get(child_key, False)) for child_key in child_keys)
             st.checkbox(
-                f"{safe_text(category_name, DEFAULT_SERVICE_CATEGORY)}",
+                f"{safe_text(category_name, DEFAULT_SERVICE_CATEGORY)} ({selected_count}/{len(child_keys)})",
                 key=category_key,
                 on_change=toggle_service_category_selection,
                 args=(category_key, child_keys),
             )
             st.markdown(
-                f'<div class="grouped-service-selector-meta">{selected_count}/{len(child_keys)} selected</div>',
+                f'<div class="grouped-service-selector-category-meta">{selected_count}/{len(child_keys)} selected</div>',
                 unsafe_allow_html=True,
             )
-            for _, row in category_df.iterrows():
-                service_id = int(row["id"])
-                child_key = f"{state_prefix}_service_{service_id}"
-                indent_col, service_col = st.columns([0.045, 0.955], gap="small")
-                with service_col:
-                    st.checkbox(
-                        service_map_label(row),
-                        key=child_key,
-                        on_change=sync_service_category_selection,
-                        args=(category_key, child_keys),
-                    )
-            if category_index < working["service_category"].nunique() - 1:
+            if bool(st.session_state.get(category_key, False)) or selected_count > 0:
+                child_indent_col, child_service_col = st.columns([0.05, 0.95], gap="small")
+                with child_service_col:
+                    for _, row in category_df.iterrows():
+                        service_id = int(row["id"])
+                        child_key = f"{state_prefix}_service_{service_id}"
+                        st.checkbox(
+                            service_map_label(row),
+                            key=child_key,
+                            on_change=sync_service_category_selection,
+                            args=(category_key, child_keys),
+                        )
+            if category_index < len(category_groups) - 1:
                 st.markdown(
-                    '<div style="height:1px; background:rgba(148, 163, 184, 0.12); margin:0.45rem 0 0.55rem 0;"></div>',
+                    '<div class="grouped-service-selector-divider"></div>',
                     unsafe_allow_html=True,
                 )
 
