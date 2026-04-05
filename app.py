@@ -4700,6 +4700,46 @@ def build_next_steps_company_table(evidence_df):
     ).reset_index(drop=True)
 
 
+def build_service_category_lookup(svc_df):
+    if svc_df is None or svc_df.empty:
+        return {}
+    working = prepare_service_map_df(svc_df)
+    lookup = {}
+    for _, row in working.iterrows():
+        service_name = safe_text(row.get("service_name")).strip().lower()
+        category_name = safe_text(row.get("service_category"), DEFAULT_SERVICE_CATEGORY).strip() or DEFAULT_SERVICE_CATEGORY
+        if not service_name:
+            continue
+        categories = lookup.setdefault(service_name, [])
+        if category_name not in categories:
+            categories.append(category_name)
+    return lookup
+
+
+def next_steps_category_matches(matched_services_text, service_category_lookup):
+    categories = []
+    for service_name in split_service_values(matched_services_text):
+        for category_name in service_category_lookup.get(service_name.strip().lower(), []):
+            if category_name not in categories:
+                categories.append(category_name)
+    return categories
+
+
+def next_steps_chip_html(values, max_visible=None):
+    items = [safe_text(value).strip() for value in values if safe_text(value).strip()]
+    if not items:
+        return '<span class="nextsteps-service-chip muted">None listed</span>'
+    visible = items[:max_visible] if max_visible else items
+    html = "".join(
+        f'<span class="nextsteps-service-chip">{escape(item)}</span>'
+        for item in visible
+    )
+    hidden_count = len(items) - len(visible)
+    if hidden_count > 0:
+        html += f'<span class="nextsteps-service-chip muted">+{hidden_count}</span>'
+    return html
+
+
 def build_next_steps_summary(top_df, all_df):
     total_companies = len(all_df)
     multiple_postings = int((all_df["relevant_posting_count"] >= 2).sum()) if not all_df.empty else 0
@@ -7010,24 +7050,58 @@ def page_next_steps():
             font-weight: 800;
             color: #eff6ff;
             line-height: 1.35;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.2rem;
         }
-        .nextsteps-top-fact-row {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 0.7rem;
-        }
-        .nextsteps-top-fact-label {
-            color: #93c5fd;
-            font-size: 0.74rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin-bottom: 0.18rem;
-        }
-        .nextsteps-top-fact-value {
-            color: #e5eefb;
-            font-size: 0.95rem;
+        .nextsteps-top-categories {
+            color: #9fb4d3;
+            font-size: 0.9rem;
             line-height: 1.45;
+            margin-bottom: 0.8rem;
+        }
+        .nextsteps-service-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.38rem;
+            margin-bottom: 0.95rem;
+        }
+        .nextsteps-service-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.26rem 0.52rem;
+            border-radius: 999px;
+            border: 1px solid rgba(96, 165, 250, 0.16);
+            background: rgba(96, 165, 250, 0.10);
+            color: #dbeafe;
+            font-size: 0.8rem;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+        .nextsteps-service-chip.muted {
+            background: rgba(148, 163, 184, 0.08);
+            border-color: rgba(148, 163, 184, 0.12);
+            color: #cbd5e1;
+        }
+        .nextsteps-top-metrics {
+            display: flex;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .nextsteps-top-metric {
+            min-width: 82px;
+        }
+        .nextsteps-top-metric-value {
+            color: #eff6ff;
+            font-size: 1rem;
+            font-weight: 800;
+            line-height: 1.15;
+        }
+        .nextsteps-top-metric-label {
+            color: #8fa4c1;
+            font-size: 0.74rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            margin-top: 0.15rem;
         }
         .nextsteps-company-box {
             border: 1px solid var(--brand-border);
@@ -7151,6 +7225,15 @@ def page_next_steps():
                 st.rerun()
     st.markdown('<div class="nextsteps-wrap">', unsafe_allow_html=True)
     top_company_count = min(5, len(company_priority_df))
+    service_category_lookup = build_service_category_lookup(services_df())
+    company_priority_df = company_priority_df.copy()
+    company_priority_df["category_matches_list"] = company_priority_df["matched_services"].apply(
+        lambda value: next_steps_category_matches(value, service_category_lookup)
+    )
+    company_priority_df["category_matches_text"] = company_priority_df["category_matches_list"].apply(
+        lambda values: " | ".join(values) if values else DEFAULT_SERVICE_CATEGORY
+    )
+    company_priority_df["service_matches_list"] = company_priority_df["matched_services"].apply(split_service_values)
     top_companies_df = company_priority_df.head(top_company_count).copy()
 
     with header_actions_col2:
@@ -7215,13 +7298,12 @@ def page_next_steps():
             '<div class="nextsteps-top-card">'
             f'<div class="nextsteps-top-rank">#{idx}</div>'
             f'<div class="nextsteps-top-company">{escape(safe_text(row["buyer_company"], "Unknown Company"))}</div>'
-            '<div class="nextsteps-top-fact-row">'
-            f'<div><div class="nextsteps-top-fact-label">Relevant Postings</div><div class="nextsteps-top-fact-value">{int(row["relevant_posting_count"])}</div></div>'
-            f'<div><div class="nextsteps-top-fact-label">Total Related</div><div class="nextsteps-top-fact-value">{int(row["related_posting_count"])}</div></div>'
-            f'<div><div class="nextsteps-top-fact-label">Freshest Date</div><div class="nextsteps-top-fact-value">{escape(safe_text(row["most_recent_posted_date"], "Unknown"))}</div></div>'
-            f'<div><div class="nextsteps-top-fact-label">Salary Listed</div><div class="nextsteps-top-fact-value">{int(row.get("salary_disclosed_count") or 0)}</div></div>'
-            '</div>'
-            f'<div style="margin-top:0.8rem;"><div class="nextsteps-top-fact-label">Matched Services</div><div class="nextsteps-top-fact-value">{escape(safe_text(row.get("matched_services"), "None listed"))}</div></div>'
+            f'<div class="nextsteps-top-categories">{escape(safe_text(row.get("category_matches_text"), DEFAULT_SERVICE_CATEGORY))}</div>'
+            f'<div class="nextsteps-service-chip-row">{next_steps_chip_html(row.get("service_matches_list", []), max_visible=5)}</div>'
+            '<div class="nextsteps-top-metrics">'
+            f'<div class="nextsteps-top-metric"><div class="nextsteps-top-metric-value">{int(row["relevant_posting_count"])}</div><div class="nextsteps-top-metric-label">Relevant</div></div>'
+            f'<div class="nextsteps-top-metric"><div class="nextsteps-top-metric-value">{int(row["related_posting_count"])}</div><div class="nextsteps-top-metric-label">Related</div></div>'
+            f'<div class="nextsteps-top-metric"><div class="nextsteps-top-metric-value">{escape(safe_text(row["most_recent_posted_date"], "Unknown"))}</div><div class="nextsteps-top-metric-label">Freshest</div></div>'
             '</div>'
         )
     if top_card_html:
@@ -7231,22 +7313,20 @@ def page_next_steps():
     priority_table_df = company_priority_df[
         [
             "buyer_company",
-            "relevant_posting_count",
-            "related_posting_count",
-            "most_recent_posted_date",
+            "category_matches_text",
             "matched_services",
-            "salary_disclosed_count",
+            "relevant_posting_count",
+            "most_recent_posted_date",
         ]
     ].copy()
     priority_table_df.insert(0, "rank", range(1, len(priority_table_df) + 1))
     priority_table_df.columns = [
         "Rank",
         "Company",
+        "Category Matches",
+        "Service Matches",
         "Relevant Postings",
-        "Total Related Postings",
         "Freshest Date",
-        "Matched Services",
-        "Salary Listed",
     ]
     st.markdown("**Ranked Companies**")
     st.dataframe(pretty_df(priority_table_df), use_container_width=True, hide_index=True)
@@ -7286,6 +7366,7 @@ def page_next_steps():
                 f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Peripheral Postings</div><div class="nextsteps-meta-value">{escape(str(company_row["peripheral_posting_count"]))}</div></div>'
                 f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Most Recent Posting Date</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["most_recent_posted_date"], "Unknown"))}</div></div>'
                 f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Salary Listed</div><div class="nextsteps-meta-value">{escape(str(int(company_row.get("salary_disclosed_count") or 0)))}</div></div>'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Category Matches</div><div class="nextsteps-meta-value">{escape(safe_text(company_row.get("category_matches_text"), DEFAULT_SERVICE_CATEGORY))}</div></div>'
                 f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Matched Services</div><div class="nextsteps-meta-value">{escape(safe_text(company_row.get("matched_services"), "None listed"))}</div></div>'
                 f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Merged Company Aliases</div><div class="nextsteps-meta-value">{escape(safe_text(company_row.get("merged_company_aliases"), "No alternate names merged"))}</div></div>'
                 f'</div>',
