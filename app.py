@@ -4514,6 +4514,67 @@ def build_expansion_company_signal_map():
     return signal_map
 
 
+def next_steps_match_type_rank(match_type):
+    mapping = {"Direct": 3, "Peripheral": 2, "Weak": 1, "None": 0}
+    return mapping.get(safe_text(match_type), 0)
+
+
+def next_steps_posting_identity_key(row):
+    source_url = safe_text(row.get("source_url")).strip().lower()
+    canonical_company = canonicalize_company_name(row.get("company_name"))
+    normalized_title = re.sub(r"\s+", " ", safe_text(row.get("job_title")).strip().lower())
+    posted_date = safe_text(row.get("posted_date")).strip().lower()
+    location = re.sub(r"\s+", " ", safe_text(row.get("location")).strip().lower())
+    if source_url:
+        return f"url::{source_url}"
+    return "fallback::" + "|".join([canonical_company, normalized_title, posted_date, location])
+
+
+def collapse_next_steps_postings(evidence_df):
+    if evidence_df.empty:
+        return pd.DataFrame()
+
+    temp = ensure_evidence_columns(evidence_df).copy()
+    temp["posted_date_parsed"] = pd.to_datetime(temp["posted_date"], errors="coerce")
+    temp["_match_type_rank"] = temp["match_type"].apply(next_steps_match_type_rank)
+    temp["_posting_key"] = temp.apply(next_steps_posting_identity_key, axis=1)
+
+    rows = []
+    for _, group in temp.groupby("_posting_key", dropna=False):
+        best = group.sort_values(
+            ["_match_type_rank", "match_score", "posted_date_parsed"],
+            ascending=[False, False, False],
+            na_position="last",
+        ).iloc[0]
+        rows.append(
+            {
+                "company_name": choose_display_company_name(group["company_name"].tolist()),
+                "job_title": safe_text(best.get("job_title"), "Unknown job title"),
+                "posted_date": safe_text(best.get("posted_date")) or "Unknown",
+                "posted_date_parsed": best.get("posted_date_parsed"),
+                "base_salary": safe_text(best.get("base_salary")) or "Not disclosed",
+                "match_type": safe_text(best.get("match_type"), "Unknown"),
+                "match_score": int(best.get("match_score") or 0),
+                "likely_service_need": safe_text(best.get("likely_service_need")) or None,
+                "buyer_department": safe_text(best.get("buyer_department")) or None,
+                "matching_responsibilities": flatten_unique(group["matching_responsibilities"].tolist()),
+                "why_it_matches": flatten_unique(group["why_it_matches"].tolist()),
+                "source_url": safe_text(best.get("source_url")) or None,
+                "location": safe_text(best.get("location")) or None,
+                "matched_services": "; ".join(flatten_unique(group["matched_service"].tolist())),
+            }
+        )
+
+    collapsed_df = pd.DataFrame(rows)
+    if collapsed_df.empty:
+        return collapsed_df
+    return collapsed_df.sort_values(
+        ["posted_date_parsed", "match_score", "job_title"],
+        ascending=[False, False, True],
+        na_position="last",
+    ).reset_index(drop=True)
+
+
 def build_next_steps_company_table(evidence_df):
     if evidence_df.empty:
         return pd.DataFrame()
@@ -4526,26 +4587,44 @@ def build_next_steps_company_table(evidence_df):
     now_ts = pd.Timestamp.now().normalize()
 
     for canonical_company, group in temp.groupby("canonical_company_name", dropna=False):
-        job_rows = group.drop_duplicates(subset=["source_url", "job_title"], keep="first").copy()
-        related_job_rows = job_rows[~job_rows["match_type"].isin(["None"])].copy()
+        collapsed_postings_df = collapse_next_steps_postings(group)
+        if collapsed_postings_df.empty:
+            continue
+
+        related_job_rows = collapsed_postings_df[~collapsed_postings_df["match_type"].isin(["None"])].copy()
         relevant_job_rows = related_job_rows[related_job_rows["match_type"].isin(["Direct", "Peripheral"])].copy()
+        direct_job_rows = relevant_job_rows[relevant_job_rows["match_type"] == "Direct"].copy()
+        peripheral_job_rows = relevant_job_rows[relevant_job_rows["match_type"] == "Peripheral"].copy()
 
         related_posting_count = len(related_job_rows)
         relevant_posting_count = len(relevant_job_rows)
         if related_posting_count == 0:
             continue
 
-        matched_services = flatten_unique(group["matched_service"].tolist())
+        matched_services = flatten_unique(
+            [
+                service
+                for value in relevant_job_rows["matched_services"].tolist()
+                for service in split_service_values(value)
+            ]
+        )
+        if not matched_services:
+            matched_services = flatten_unique(group["matched_service"].tolist())
         display_company_name = choose_display_company_name(group["company_name"].tolist())
         likely_buyer_department = (
             pd.Series([x for x in group["buyer_department"] if pd.notna(x) and str(x).strip()]).mode().iloc[0]
             if any(pd.notna(group["buyer_department"]))
             else None
         )
-        source_urls = flatten_unique(group["source_url"].tolist())[:5]
-        salary_values = flatten_unique(group["base_salary"].tolist())
+        source_urls = flatten_unique(related_job_rows["source_url"].tolist())[:5]
+        salary_values = flatten_unique(related_job_rows["base_salary"].tolist())
         salary_numeric_values = [value for value in [parse_salary_high_value(s) for s in salary_values] if value is not None]
         salary_signal = salary_values[0] if salary_values else None
+        salary_disclosed_count = int(
+            related_job_rows["base_salary"].fillna("").astype(str).str.strip().ne("").sum()
+            - related_job_rows["base_salary"].fillna("").astype(str).str.strip().eq("Not disclosed").sum()
+        )
+        merged_aliases = flatten_unique(group["company_name"].tolist())
 
         recent_dates = related_job_rows["posted_date_parsed"].dropna()
         most_recent_posted = recent_dates.max() if not recent_dates.empty else pd.NaT
@@ -4590,37 +4669,19 @@ def build_next_steps_company_table(evidence_df):
         elif expansion_signal_count >= 2:
             expansion_rank = 2
 
-        why_parts = [
-            f"{relevant_posting_count} relevant posting{'s' if relevant_posting_count != 1 else ''} found",
-        ]
-        if related_posting_count > relevant_posting_count:
-            why_parts.append(
-                f"{related_posting_count} total related posting{'s' if related_posting_count != 1 else ''} found"
-            )
-        if most_recent_posted_text != "Unknown":
-            why_parts.append(f"most recent posting dated {most_recent_posted_text}")
-        if salary_signal:
-            why_parts.append(f"explicit base salary disclosed ({salary_signal})")
-        if expansion_signal_count:
-            why_parts.append(f"also highlighted in saved expansion analysis ({expansion_signal_count} signal{'s' if expansion_signal_count != 1 else ''})")
-
-        suggested_next_step = (
-            f"Prioritize outreach to the {likely_buyer_department} team and reference the matching postings."
-            if likely_buyer_department
-            else "Prioritize outreach to the team responsible for this function and reference the matching postings."
-        )
-
         rows.append(
             {
                 "buyer_company": safe_text(display_company_name, "Unknown Company"),
                 "relevant_posting_count": relevant_posting_count,
                 "related_posting_count": related_posting_count,
+                "direct_posting_count": len(direct_job_rows),
+                "peripheral_posting_count": len(peripheral_job_rows),
                 "most_recent_posted_date": most_recent_posted_text,
                 "salary_signal": salary_signal or "Not disclosed",
+                "salary_disclosed_count": salary_disclosed_count,
                 "matched_services": "; ".join(matched_services),
                 "likely_buyer_department_general": likely_buyer_department,
-                "why_highlighted": ". ".join(why_parts) + ".",
-                "suggested_next_step": suggested_next_step,
+                "merged_company_aliases": "; ".join(alias for alias in merged_aliases if alias != display_company_name),
                 "source_urls": " | ".join(source_urls),
                 "_canonical_company_name": canonical_company,
                 "_recency_rank": recency_rank,
@@ -4729,6 +4790,7 @@ def render_next_steps_job_block(job_row):
     why_text = "; ".join(why_matches) if why_matches else "No additional evidence notes captured."
     responsibilities = flatten_unique(job_row.get("matching_responsibilities", []))
     responsibilities_text = "; ".join(responsibilities) if responsibilities else "None captured."
+    matched_services_text = safe_text(job_row.get("matched_services"), "None listed")
     source_url = safe_text(job_row.get("source_url"))
     source_line = f"[Open source posting]({source_url})" if source_url else "No source URL saved."
 
@@ -4740,6 +4802,7 @@ def render_next_steps_job_block(job_row):
             f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Base Salary:</strong> {escape(safe_text(job_row.get("base_salary"), "Not disclosed"))}</div>'
             f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Posted Date:</strong> {escape(safe_text(job_row.get("posted_date"), "Unknown"))}</div>'
             f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Match Type:</strong> {escape(safe_text(job_row.get("match_type"), "Unknown"))}</div>'
+            f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Matched Services:</strong> {escape(matched_services_text)}</div>'
             f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Likely Service Need:</strong> {escape(safe_text(job_row.get("likely_service_need"), "Not specified"))}</div>'
             f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Evidence:</strong> {escape(why_text)}</div>'
             f'<div style="color:#cbd5e1; margin-bottom:0.2rem;"><strong>Relevant Responsibilities:</strong> {escape(responsibilities_text)}</div>'
@@ -6912,8 +6975,59 @@ def page_next_steps():
         """
         <style>
         .nextsteps-wrap {
-            max-width: 1080px;
+            max-width: 1140px;
             margin: 0 auto;
+        }
+        .nextsteps-header-meta {
+            color: #94a3b8;
+            font-size: 0.92rem;
+            line-height: 1.55;
+            margin: -0.15rem 0 0.9rem 0;
+        }
+        .nextsteps-top-card-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.85rem;
+            margin: 0.35rem 0 1rem 0;
+        }
+        .nextsteps-top-card {
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 1rem;
+            background: linear-gradient(180deg, rgba(96, 165, 250, 0.09), rgba(255,255,255,0.02));
+            padding: 1rem 1.05rem;
+            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.10);
+        }
+        .nextsteps-top-rank {
+            color: #93c5fd;
+            font-size: 0.76rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.35rem;
+        }
+        .nextsteps-top-company {
+            font-size: 1.08rem;
+            font-weight: 800;
+            color: #eff6ff;
+            line-height: 1.35;
+            margin-bottom: 0.75rem;
+        }
+        .nextsteps-top-fact-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.7rem;
+        }
+        .nextsteps-top-fact-label {
+            color: #93c5fd;
+            font-size: 0.74rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 0.18rem;
+        }
+        .nextsteps-top-fact-value {
+            color: #e5eefb;
+            font-size: 0.95rem;
+            line-height: 1.45;
         }
         .nextsteps-company-box {
             border: 1px solid var(--brand-border);
@@ -6931,7 +7045,7 @@ def page_next_steps():
         }
         .nextsteps-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 0.85rem;
             margin-bottom: 0.95rem;
         }
@@ -7001,14 +7115,17 @@ def page_next_steps():
             line-height: 1.45;
         }
         @media (max-width: 900px) {
+            .nextsteps-top-card-grid,
             .nextsteps-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr 1fr;
             }
             .nextsteps-summary-grid {
                 grid-template-columns: 1fr 1fr;
             }
         }
         @media (max-width: 640px) {
+            .nextsteps-top-card-grid,
+            .nextsteps-grid,
             .nextsteps-summary-grid {
                 grid-template-columns: 1fr;
             }
@@ -7018,8 +7135,8 @@ def page_next_steps():
         unsafe_allow_html=True,
     )
 
-    refresh_left, refresh_right = st.columns([1, 2])
-    with refresh_left:
+    header_actions_col1, header_actions_col2 = st.columns([1, 1])
+    with header_actions_col1:
         if st.button(f"Refresh analysis ({NEXT_STEPS_REFRESH_COST} credits)", key="next_steps_refresh_button"):
             current_balance = credits()
             if current_balance < NEXT_STEPS_REFRESH_COST:
@@ -7032,98 +7149,122 @@ def page_next_steps():
                     f"Next Steps analysis refreshed. {NEXT_STEPS_REFRESH_COST} credits used. Credits remaining: {remaining}."
                 )
                 st.rerun()
-    with refresh_right:
-        last_refresh = st.session_state.get(refresh_key)
-        if last_refresh:
-            st.caption(
-                f"Last refreshed: {last_refresh} | Use refresh after new searches to re-rank the top 1 to 5 companies."
-            )
-        else:
-            st.caption(
-                f"Use refresh after new searches to re-rank the top 1 to 5 companies. Each refresh costs {NEXT_STEPS_REFRESH_COST} credits."
-            )
-
     st.markdown('<div class="nextsteps-wrap">', unsafe_allow_html=True)
     top_company_count = min(5, len(company_priority_df))
     top_companies_df = company_priority_df.head(top_company_count).copy()
 
-    st.download_button(
-        "Download top next steps as CSV",
-        data=csv_data(
-            top_companies_df[
-                [
-                    "buyer_company",
-                    "relevant_posting_count",
-                    "most_recent_posted_date",
-                    "salary_signal",
-                    "matched_services",
-                    "likely_buyer_department_general",
-                    "why_highlighted",
-                    "suggested_next_step",
-                    "source_urls",
+    with header_actions_col2:
+        st.download_button(
+            "Download top next steps as CSV",
+            data=csv_data(
+                company_priority_df[
+                    [
+                        "buyer_company",
+                        "relevant_posting_count",
+                        "related_posting_count",
+                        "direct_posting_count",
+                        "peripheral_posting_count",
+                        "most_recent_posted_date",
+                        "salary_disclosed_count",
+                        "matched_services",
+                        "likely_buyer_department_general",
+                        "merged_company_aliases",
+                        "source_urls",
+                    ]
                 ]
-            ]
-        ),
-        file_name="nextstepsignal_next_steps.csv",
-        mime="text/csv",
-    )
+            ),
+            file_name="nextstepsignal_next_steps.csv",
+            mime="text/csv",
+        )
 
     freshest_date = next(
         (value for value in company_priority_df["most_recent_posted_date"].tolist() if value and value != "Unknown"),
         "Unknown",
     )
     multiple_postings = int((company_priority_df["relevant_posting_count"] >= 2).sum())
-    salary_disclosed = int((company_priority_df["salary_signal"] != "Not disclosed").sum())
+    total_relevant_postings = int(company_priority_df["relevant_posting_count"].sum())
+    last_refresh = st.session_state.get(refresh_key)
+    if last_refresh:
+        st.markdown(
+            f'<div class="nextsteps-header-meta">Relevant postings are deduped Direct and Peripheral matches across saved evidence. Last refreshed: {escape(last_refresh)}.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="nextsteps-header-meta">Relevant postings are deduped Direct and Peripheral matches across saved evidence.</div>',
+            unsafe_allow_html=True,
+        )
+
     st.subheader("Analysis")
     st.markdown(
         (
             '<div class="nextsteps-summary-grid">'
             f'<div class="nextsteps-summary-card"><div class="nextsteps-summary-label">Companies Reviewed</div><div class="nextsteps-summary-value">{len(company_priority_df)}</div><div class="nextsteps-summary-subvalue">Total buyer companies included in the current review.</div></div>'
-            f'<div class="nextsteps-summary-card"><div class="nextsteps-summary-label">Multiple Relevant Postings</div><div class="nextsteps-summary-value">{multiple_postings}</div><div class="nextsteps-summary-subvalue">Companies showing repeated demand rather than a single isolated role.</div></div>'
-            f'<div class="nextsteps-summary-card"><div class="nextsteps-summary-label">Salary Disclosed</div><div class="nextsteps-summary-value">{salary_disclosed}</div><div class="nextsteps-summary-subvalue">Companies with at least one explicit base salary in the captured postings.</div></div>'
+            f'<div class="nextsteps-summary-card"><div class="nextsteps-summary-label">Relevant Postings Captured</div><div class="nextsteps-summary-value">{total_relevant_postings}</div><div class="nextsteps-summary-subvalue">Deduped Direct and Peripheral postings across the current review.</div></div>'
+            f'<div class="nextsteps-summary-card"><div class="nextsteps-summary-label">Companies With 2+ Relevant</div><div class="nextsteps-summary-value">{multiple_postings}</div><div class="nextsteps-summary-subvalue">Buyer companies with repeated relevant hiring signals.</div></div>'
             f'<div class="nextsteps-summary-card"><div class="nextsteps-summary-label">Freshest Posting</div><div class="nextsteps-summary-value">{escape(freshest_date)}</div><div class="nextsteps-summary-subvalue">Most recent posting date observed in the current saved evidence.</div></div>'
             '</div>'
         ),
         unsafe_allow_html=True,
     )
 
-    priority_table_df = top_companies_df[
+    top_three_df = company_priority_df.head(min(3, len(company_priority_df))).copy()
+    top_card_html = []
+    for idx, (_, row) in enumerate(top_three_df.iterrows(), start=1):
+        top_card_html.append(
+            '<div class="nextsteps-top-card">'
+            f'<div class="nextsteps-top-rank">#{idx}</div>'
+            f'<div class="nextsteps-top-company">{escape(safe_text(row["buyer_company"], "Unknown Company"))}</div>'
+            '<div class="nextsteps-top-fact-row">'
+            f'<div><div class="nextsteps-top-fact-label">Relevant Postings</div><div class="nextsteps-top-fact-value">{int(row["relevant_posting_count"])}</div></div>'
+            f'<div><div class="nextsteps-top-fact-label">Total Related</div><div class="nextsteps-top-fact-value">{int(row["related_posting_count"])}</div></div>'
+            f'<div><div class="nextsteps-top-fact-label">Freshest Date</div><div class="nextsteps-top-fact-value">{escape(safe_text(row["most_recent_posted_date"], "Unknown"))}</div></div>'
+            f'<div><div class="nextsteps-top-fact-label">Salary Listed</div><div class="nextsteps-top-fact-value">{int(row.get("salary_disclosed_count") or 0)}</div></div>'
+            '</div>'
+            f'<div style="margin-top:0.8rem;"><div class="nextsteps-top-fact-label">Matched Services</div><div class="nextsteps-top-fact-value">{escape(safe_text(row.get("matched_services"), "None listed"))}</div></div>'
+            '</div>'
+        )
+    if top_card_html:
+        st.markdown("**Top Companies**")
+        st.markdown(f'<div class="nextsteps-top-card-grid">{"".join(top_card_html)}</div>', unsafe_allow_html=True)
+
+    priority_table_df = company_priority_df[
         [
             "buyer_company",
             "relevant_posting_count",
+            "related_posting_count",
             "most_recent_posted_date",
-            "salary_signal",
-            "why_highlighted",
+            "matched_services",
+            "salary_disclosed_count",
         ]
     ].copy()
+    priority_table_df.insert(0, "rank", range(1, len(priority_table_df) + 1))
     priority_table_df.columns = [
+        "Rank",
         "Company",
         "Relevant Postings",
-        "Most Recent Date",
-        "Salary Disclosed",
-        "Why Prioritized",
+        "Total Related Postings",
+        "Freshest Date",
+        "Matched Services",
+        "Salary Listed",
     ]
-    st.markdown("**Top Priority Companies**")
+    st.markdown("**Ranked Companies**")
     st.dataframe(pretty_df(priority_table_df), use_container_width=True, hide_index=True)
 
-    st.subheader("Priority Company Reports")
+    st.subheader("Company Evidence")
     for idx, (_, company_row) in enumerate(top_companies_df.iterrows(), start=1):
         company_name = company_row["buyer_company"]
         canonical_company_name = safe_text(company_row.get("_canonical_company_name"))
         company_evidence_df = ensure_evidence_columns(
             master_evidence_df[master_evidence_df["canonical_company_name"] == canonical_company_name].copy()
         )
-        company_evidence_df = company_evidence_df.sort_values(
-            ["posted_date", "match_score"],
-            ascending=[False, False],
-        ).reset_index(drop=True)
-
-        relevant_jobs_df = company_evidence_df[
-            company_evidence_df["match_type"].isin(["Direct", "Peripheral"])
-        ].drop_duplicates(subset=["source_url", "job_title"], keep="first")
-        other_jobs_df = company_evidence_df[
-            company_evidence_df["match_type"].isin(["Weak"])
-        ].drop_duplicates(subset=["source_url", "job_title"], keep="first")
+        collapsed_company_df = collapse_next_steps_postings(company_evidence_df)
+        relevant_jobs_df = collapsed_company_df[
+            collapsed_company_df["match_type"].isin(["Direct", "Peripheral"])
+        ].reset_index(drop=True)
+        other_jobs_df = collapsed_company_df[
+            collapsed_company_df["match_type"].isin(["Weak"])
+        ].reset_index(drop=True)
 
         expander_label = (
             f"#{idx} {company_name} | "
@@ -7134,22 +7275,19 @@ def page_next_steps():
         with st.expander(expander_label, expanded=False):
             st.markdown('<div class="nextsteps-company-box">', unsafe_allow_html=True)
             st.markdown(
-                f'<div class="nextsteps-company-title">Company Name: {escape(company_name)}</div>',
+                f'<div class="nextsteps-company-title">{escape(company_name)}</div>',
                 unsafe_allow_html=True,
             )
             st.markdown(
                 f'<div class="nextsteps-grid">'
-                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Company Description</div><div class="nextsteps-meta-value">{escape(build_company_business_description(company_name, company_evidence_df))}</div></div>'
-                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Why It Is Relevant</div><div class="nextsteps-meta-value">{escape(build_company_next_steps_description(company_row, company_evidence_df))}</div></div>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                f'<div class="nextsteps-grid">'
-                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Suggested Next Step</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["suggested_next_step"], "No next step captured."))}</div></div>'
-                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Likely Buyer Department</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["likely_buyer_department_general"], "Unknown"))}</div></div>'
                 f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Relevant Posting Count</div><div class="nextsteps-meta-value">{escape(str(company_row["relevant_posting_count"]))}</div></div>'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Total Related Postings</div><div class="nextsteps-meta-value">{escape(str(company_row["related_posting_count"]))}</div></div>'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Direct Postings</div><div class="nextsteps-meta-value">{escape(str(company_row["direct_posting_count"]))}</div></div>'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Peripheral Postings</div><div class="nextsteps-meta-value">{escape(str(company_row["peripheral_posting_count"]))}</div></div>'
                 f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Most Recent Posting Date</div><div class="nextsteps-meta-value">{escape(safe_text(company_row["most_recent_posted_date"], "Unknown"))}</div></div>'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Salary Listed</div><div class="nextsteps-meta-value">{escape(str(int(company_row.get("salary_disclosed_count") or 0)))}</div></div>'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Matched Services</div><div class="nextsteps-meta-value">{escape(safe_text(company_row.get("matched_services"), "None listed"))}</div></div>'
+                f'<div class="nextsteps-meta-card"><div class="nextsteps-meta-label">Merged Company Aliases</div><div class="nextsteps-meta-value">{escape(safe_text(company_row.get("merged_company_aliases"), "No alternate names merged"))}</div></div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
