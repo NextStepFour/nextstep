@@ -6341,24 +6341,6 @@ def page_services():
                 height: 1px;
                 background: rgba(148, 163, 184, 0.18);
             }
-            .service-quick-grid {
-                display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-                gap: 0.8rem;
-                margin-bottom: 0.9rem;
-            }
-            .service-quick-tile {
-                border: 1px solid rgba(255,255,255,0.08);
-                border-radius: 0.9rem;
-                background: rgba(15, 23, 42, 0.34);
-                padding: 0.8rem 0.85rem;
-                position: relative;
-            }
-            .service-quick-tile.active {
-                border-color: var(--brand-blue);
-                background: rgba(96, 165, 250, 0.10);
-                box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.20) inset;
-            }
             .service-tile-actions {
                 position: absolute;
                 top: 0.45rem;
@@ -6399,14 +6381,6 @@ def page_services():
                 border-color: rgba(239, 68, 68, 0.18);
                 color: #fecaca !important;
             }
-            .service-quick-label {
-                color: #eff6ff;
-                font-weight: 800;
-                line-height: 1.45;
-                margin-bottom: 0.65rem;
-                word-break: break-word;
-                padding-right: 6rem;
-            }
             .service-chip-grid {
                 display: grid;
                 grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -6437,7 +6411,7 @@ def page_services():
                 line-height: 1.45;
                 margin-bottom: 0.7rem;
                 word-break: break-word;
-                padding-right: 4.2rem;
+                padding-right: 6rem;
             }
             .service-chip-meta {
                 color: #cbd5e1;
@@ -6452,13 +6426,11 @@ def page_services():
                 min-height: 58px;
             }
             @media (max-width: 960px) {
-                .service-quick-grid,
                 .service-chip-grid {
                     grid-template-columns: 1fr 1fr;
                 }
             }
             @media (max-width: 640px) {
-                .service-quick-grid,
                 .service-chip-grid {
                     grid-template-columns: 1fr;
                 }
@@ -6485,46 +6457,6 @@ def page_services():
                 ),
                 unsafe_allow_html=True,
             )
-            st.markdown('<div class="service-quick-grid">', unsafe_allow_html=True)
-            quick_columns = st.columns(3)
-            for quick_idx, (_, row) in enumerate(category_df.iterrows()):
-                service_id = int(row["id"])
-                service_number = int(row["service_number"])
-                with quick_columns[quick_idx % 3]:
-                    active_class = " active" if focus_id == service_id else ""
-                    quick_actions = (
-                        '<div class="service-tile-actions">'
-                        f'{service_action_link(service_id, "edit", "edit", "Edit service")}'
-                        f'{service_action_link(service_id, "delete", "delete", "Delete service", danger=True)}'
-                        f'{service_action_link(service_id, "up", "up", "Move service up")}'
-                        f'{service_action_link(service_id, "down", "down", "Move service down")}'
-                        '</div>'
-                    )
-                    st.markdown(
-                        (
-                            f'<div class="service-quick-tile{active_class}">'
-                            f"{quick_actions}"
-                            f'<div class="service-quick-label">#{service_number} | {escape(safe_text(row["service_category"], DEFAULT_SERVICE_CATEGORY))} | {escape(safe_text(row["service_name"], "Untitled Service"))}</div>'
-                            '</div>'
-                        ),
-                        unsafe_allow_html=True,
-                    )
-                    continue
-                    mini1, mini2, mini3 = st.columns(3)
-                    if mini1.button("Edit", key=f"quick_edit_{service_id}", use_container_width=True):
-                        st.session_state["service_rename_id"] = service_id
-                        st.session_state["service_focus_id"] = service_id
-                        st.session_state.pop("service_delete_id", None)
-                        st.rerun()
-                    if mini2.button("↑", key=f"quick_up_{service_id}", use_container_width=True):
-                        move_service_within_category(service_id, "up")
-                        st.session_state["service_focus_id"] = service_id
-                        st.rerun()
-                    if mini3.button("↓", key=f"quick_down_{service_id}", use_container_width=True):
-                        move_service_within_category(service_id, "down")
-                        st.session_state["service_focus_id"] = service_id
-                        st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
 
             st.markdown('<div class="service-chip-grid">', unsafe_allow_html=True)
             tile_columns = st.columns(3)
@@ -6543,6 +6475,8 @@ def page_services():
                         '<div class="service-tile-actions">'
                         f'{service_action_link(service_id, "edit", "edit", "Edit service")}'
                         f'{service_action_link(service_id, "delete", "delete", "Delete service", danger=True)}'
+                        f'{service_action_link(service_id, "up", "up", "Move service up")}'
+                        f'{service_action_link(service_id, "down", "down", "Move service down")}'
                         '</div>'
                     )
                     st.markdown(
